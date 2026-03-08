@@ -1,3 +1,17 @@
+# ####################################################################################
+# 🛡️ Egyxos Scanner PRO: Advanced Reconnaissance & Visual Monitor
+# 
+# Features: 
+# 1. Subfinder (Subdomain Discovery)
+# 2. GoWitness (Visual Web Screenshotting)
+# 3. ParamSpider (URL & Parameter Mining)
+# 4. Arjun (Hidden Parameter Brute Force)
+# 5. Nmap (IP, Port, OS Fingerprinting & Service Versioning)
+# 6. Nuclei (Vulnerability Assessment)
+# 
+# Real-time Visual Alerts & Multi-Tool reporting to Discord.
+# ####################################################################################
+
 name: Egyxos Scanner
 
 on:
@@ -27,135 +41,146 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nmap chromium-browser
+          
       - name: Install Security Tools
         run: |
-          sudo apt-get update && sudo apt-get install -y nmap
+          # Go-based tools
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          go install -v github.com/sensepost/gowitness@latest
           
-          # Install ParamSpider and Arjun from Source (they are not on PyPI)
+          # Python-based tools
           pip install git+https://github.com/devanshbatham/paramspider.git
           pip install git+https://github.com/s0md3v/Arjun.git
           
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
+      # --- 1. SUBFINDER (Discovery) ---
       - name: Subdomain Discovery
         id: subfinder
         run: |
-          # Use || true to prevent exit code 1 if subfinder finds nothing
           subfinder -d ${{ github.event.inputs.target_domain }} -o subdomains.txt || touch subdomains.txt
           if [ -s subdomains.txt ]; then
-            echo "count=$(wc -l < subdomains.txt)" >> $GITHUB_OUTPUT
-          else
-            echo "count=0" >> $GITHUB_OUTPUT
+            COUNT=$(wc -l < subdomains.txt)
+            LIST=$(head -n 10 subdomains.txt | tr '\n' ',' | sed 's/,$//')
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "username": "Egyxos Subfinder",
+              "embeds": [{
+                "title": "🚀 Subdomains Discovered",
+                "description": "Target: **${{ github.event.inputs.target_domain }}**\nTotal Found: **'"$COUNT"'**",
+                "color": 3066993,
+                "fields": [{"name": "Sample List", "value": "```'"$LIST"'```"}]
+              }]
+            }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
-      - name: Notify Discord (Subdomains Found)
-        if: steps.subfinder.outputs.count > 0
-        run: |
-          LIST=$(head -n 15 subdomains.txt | tr '\n' ',' | sed 's/,$//')
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d '{
-                 "username": "Egyxos Scanner",
-                 "embeds": [{
-                   "title": "🚀 Subdomain Discovery Complete",
-                   "description": "Found **${{ steps.subfinder.outputs.count }}** subdomains for **${{ github.event.inputs.target_domain }}**.",
-                   "color": 3066993,
-                   "fields": [
-                     {"name": "Sample List", "value": "```'"$LIST"'```"}
-                   ]
-                 }]
-               }' "${{ secrets.DISCORD_WEBHOOK }}"
-
-      - name: Parameter Discovery (ParamSpider)
-        run: |
-          # ParamSpider syntax: paramspider -d domain
-          # It saves results in results/domain.txt
-          paramspider -d ${{ github.event.inputs.target_domain }} || true
-          if [ -d "results" ]; then
-            grep "http" results/*.txt > all_params.txt || touch all_params.txt
-          else
-            touch all_params.txt
-          fi
-
-      - name: Parameter Brute Force (Arjun)
-        run: |
-          # Arjun often exits with 1 if no parameters are found; we force success
-          arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
-
-      - name: IP, OS, and Version Scanning (Nmap)
+      # --- 2. GOWITNESS (Visual Recon) ---
+      - name: Capture Screenshots (GoWitness)
         run: |
           if [ -s subdomains.txt ]; then
-            # -Pn is critical as many targets block pings, causing Nmap to exit 1
-            sudo nmap -iL subdomains.txt -F -O -sV -T4 -Pn -oN nmap_results.txt || touch nmap_results.txt
-          else
-            echo "No subdomains to scan with Nmap." > nmap_results.txt
+            # We add http/https prefixes for gowitness
+            sed 's/^/http:\/\//' subdomains.txt > urls.txt
+            sed 's/^/https:\/\//' subdomains.txt >> urls.txt
+            gowitness file -f urls.txt --threads 10 --timeout 15
+            
+            # Count successful screenshots
+            SCREENSHOT_COUNT=$(ls -1 screenshots/*.png 2>/dev/null | wc -l || echo "0")
+            
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "username": "Egyxos Visual",
+              "embeds": [{
+                "title": "📸 Visual Recon Complete",
+                "description": "Captured **'"$SCREENSHOT_COUNT"'** web interface screenshots for the target.",
+                "color": 10181046,
+                "footer": {"text": "View gallery in GitHub Artifacts"}
+              }]
+            }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
+      # --- 3. PARAMSPIDER (Mining) ---
+      - name: Parameter Discovery (ParamSpider)
+        run: |
+          paramspider -d ${{ github.event.inputs.target_domain }} || true
+          if [ -d "results" ]; then
+            grep "http" results/*.txt | head -n 20 > all_params.txt || touch all_params.txt
+            if [ -s all_params.txt ]; then
+              PARAM_LIST=$(head -n 5 all_params.txt | sed 's/"/\\"/g')
+              curl -H "Content-Type: application/json" -X POST -d '{
+                "username": "Egyxos ParamSpider",
+                "embeds": [{
+                  "title": "🔗 Parameters Mining",
+                  "description": "Found entry points for **${{ github.event.inputs.target_domain }}**",
+                  "color": 15105570,
+                  "fields": [{"name": "URL Preview", "value": "```'"$PARAM_LIST"'```"}]
+                }]
+              }' "${{ secrets.DISCORD_WEBHOOK }}"
+            fi
+          fi
+
+      # --- 4. ARJUN (Hidden Params) ---
+      - name: Parameter Brute Force (Arjun)
+        run: |
+          arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
+          if [ -s arjun_results.json ] && [ "$(cat arjun_results.json)" != "{}" ]; then
+            ARJUN_DATA=$(cat arjun_results.json | sed 's/"/\\"/g' | head -c 500)
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "username": "Egyxos Arjun",
+              "embeds": [{
+                "title": "💉 Hidden Parameters Found",
+                "color": 15844367,
+                "fields": [{"name": "Findings", "value": "```json\n'"$ARJUN_DATA"'\n```"}]
+              }]
+            }' "${{ secrets.DISCORD_WEBHOOK }}"
+          fi
+
+      # --- 5. NMAP (Infra) ---
+      - name: IP & OS Scanning (Nmap)
+        run: |
+          if [ -s subdomains.txt ]; then
+            sudo nmap -iL subdomains.txt -F -O -sV -T4 -Pn -oN nmap_results.txt || touch nmap_results.txt
+            if [ -s nmap_results.txt ]; then
+              NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:|PORT|STATE|SERVICE" nmap_results.txt | head -n 15 | sed 's/"/\\"/g')
+              curl -H "Content-Type: application/json" -X POST -d '{
+                "username": "Egyxos Nmap",
+                "embeds": [{
+                  "title": "🖥️ Infra & OS Mapping",
+                  "color": 3447003,
+                  "fields": [{"name": "Summary", "value": "```'"$NMAP_SUMMARY"'```"}]
+                }]
+              }' "${{ secrets.DISCORD_WEBHOOK }}"
+            fi
+          fi
+
+      # --- 6. NUCLEI (Vulns) ---
       - name: Vulnerability Scan (Nuclei)
-        id: nuclei
         run: |
           if [ -s subdomains.txt ]; then
             nuclei -l subdomains.txt -severity medium,high,critical -o nuclei_results.txt || touch nuclei_results.txt
             if [ -s nuclei_results.txt ]; then
-              echo "vulns_found=true" >> $GITHUB_OUTPUT
-            else
-              echo "vulns_found=false" >> $GITHUB_OUTPUT
+              VULN_DATA=$(cat nuclei_results.txt | head -c 1000 | sed 's/"/\\"/g')
+              curl -H "Content-Type: application/json" -X POST -d '{
+                "username": "Egyxos Nuclei",
+                "embeds": [{
+                  "title": "🚨 Critical Findings",
+                  "color": 15158332,
+                  "fields": [{"name": "Alerts", "value": "```'"$VULN_DATA"'```"}]
+                }]
+              }' "${{ secrets.DISCORD_WEBHOOK }}"
             fi
-          else
-             echo "vulns_found=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Notify Discord (Final Results)
-        run: |
-          if [ -f nmap_results.txt ] && [ -s nmap_results.txt ]; then
-            # Escape quotes to prevent JSON payload errors in curl
-            NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:" nmap_results.txt | head -n 15 | sed 's/"/\\"/g')
-          else
-            NMAP_SUMMARY="No Nmap data available for this target."
-          fi
-          
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d '{
-                 "username": "Egyxos Recon",
-                 "embeds": [{
-                   "title": "🔍 Advanced Recon Finished",
-                   "description": "Scan for **${{ github.event.inputs.target_domain }}** included OS Fingerprinting and Versioning.",
-                   "color": 3447003,
-                   "fields": [
-                     {"name": "IP & OS Summary", "value": "```'"$NMAP_SUMMARY"'```"},
-                     {"name": "Full Reports", "value": "Check Github Artifacts for full logs"}
-                   ]
-                 }]
-               }' "${{ secrets.DISCORD_WEBHOOK }}"
-
-      - name: Notify Discord (Vulnerabilities Found)
-        if: steps.nuclei.outputs.vulns_found == 'true'
-        run: |
-          VULN_DATA=$(cat nuclei_results.txt | head -c 1500 | sed 's/"/\\"/g')
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d '{
-                 "username": "Egyxos Alerts",
-                 "embeds": [{
-                   "title": "🚨 Vulnerabilities Detected!",
-                   "description": "Issues found on **${{ github.event.inputs.target_domain }}**.",
-                   "color": 15158332,
-                   "fields": [
-                     {"name": "Nuclei Findings", "value": "```'"$VULN_DATA"'```"}
-                   ]
-                 }]
-               }' "${{ secrets.DISCORD_WEBHOOK }}"
-
-      - name: Upload Scan Artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Egyxos-Full-Reports-${{ github.event.inputs.target_domain }}
+          name: Egyxos-PRO-Reports-${{ github.event.inputs.target_domain }}
           path: |
             subdomains.txt
             nuclei_results.txt
             nmap_results.txt
             arjun_results.json
             all_params.txt
+            screenshots/
