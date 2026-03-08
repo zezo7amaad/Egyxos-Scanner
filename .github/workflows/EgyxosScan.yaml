@@ -1,44 +1,56 @@
 name: Egyxos Scanner Automation
 
 on:
-  workflow_dispatch: # Allows you to run it manually
+  workflow_dispatch:
+    inputs:
+      target_domain:
+        description: 'Target domain to scan (e.g., example.com)'
+        required: true
+        default: 'google.com'
   schedule:
-    - cron: '0 */6 * * *' # Runs every 6 hours
+    - cron: '0 */6 * * *' # Automated run every 6 hours
+
+permissions:
+  contents: write  # Allows the action to save history back to your repo
 
 jobs:
-  build:
+  recon:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Setup Go & Python
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
-        run: pip install -r requirements.txt
-
-      - name: Install Recon Tools
+      - name: Install Tools (Subfinder & Nuclei)
         run: |
-          sudo apt-get install nmap
+          sudo apt-get update && sudo apt-get install -y nmap
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          pip install requests
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
-      - name: Run Subfinder
-        run: subfinder -d google.com -o subdomains.txt # Replace google.com with your target
+      - name: Run Subdomain Discovery
+        # This uses the domain you type in the GitHub UI
+        run: subfinder -d ${{ github.event.inputs.target_domain || 'google.com' }} -o subdomains.txt
 
-      - name: Process Results
+      - name: Notify Discord & Compare
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: python scripts/egyxos_logic.py
 
-      - name: Update History
+      - name: Update History in GitHub
         run: |
+          git config --local user.email "bot@egyxos.com"
+          git config --local user.name "Egyxos-Bot"
           cp subdomains.txt subdomains_history.txt
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
           git add subdomains_history.txt
-          git commit -m "Update subdomain history [skip ci]" || echo "No changes"
+          git commit -m "Scan results for ${{ github.event.inputs.target_domain }}" || echo "No changes"
           git push
