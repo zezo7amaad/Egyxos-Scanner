@@ -32,7 +32,11 @@ jobs:
           sudo apt-get update && sudo apt-get install -y nmap
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          pip install arjun paramspider
+          
+          # Install ParamSpider and Arjun from Source (they are not on PyPI)
+          pip install git+https://github.com/devanshbatham/paramspider.git
+          pip install git+https://github.com/s0md3v/Arjun.git
+          
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
       - name: Subdomain Discovery
@@ -66,10 +70,10 @@ jobs:
 
       - name: Parameter Discovery (ParamSpider)
         run: |
-          # Ensure results directory exists to prevent grep errors
-          mkdir -p results
-          paramspider -d ${{ github.event.inputs.target_domain }} --output params.txt || true
-          if [ -d "results" ] && [ "$(ls -A results)" ]; then
+          # ParamSpider syntax: paramspider -d domain
+          # It saves results in results/domain.txt
+          paramspider -d ${{ github.event.inputs.target_domain }} || true
+          if [ -d "results" ]; then
             grep "http" results/*.txt > all_params.txt || touch all_params.txt
           else
             touch all_params.txt
