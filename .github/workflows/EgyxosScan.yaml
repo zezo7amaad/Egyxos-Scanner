@@ -1,4 +1,4 @@
-name: Egyxos Scanner (Mohammed Fathy Style)
+name: Egyxos Scanner 
 
 on:
   workflow_dispatch:
