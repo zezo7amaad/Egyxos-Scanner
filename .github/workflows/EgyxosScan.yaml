@@ -38,6 +38,7 @@ jobs:
       - name: Subdomain Discovery
         id: subfinder
         run: |
+          # Use || true to prevent exit code 1 if subfinder finds nothing
           subfinder -d ${{ github.event.inputs.target_domain }} -o subdomains.txt || touch subdomains.txt
           if [ -s subdomains.txt ]; then
             echo "count=$(wc -l < subdomains.txt)" >> $GITHUB_OUTPUT
@@ -65,9 +66,10 @@ jobs:
 
       - name: Parameter Discovery (ParamSpider)
         run: |
-          # ParamSpider creates a directory named 'results'
+          # Ensure results directory exists to prevent grep errors
+          mkdir -p results
           paramspider -d ${{ github.event.inputs.target_domain }} --output params.txt || true
-          if [ -d "results" ]; then
+          if [ -d "results" ] && [ "$(ls -A results)" ]; then
             grep "http" results/*.txt > all_params.txt || touch all_params.txt
           else
             touch all_params.txt
@@ -75,13 +77,13 @@ jobs:
 
       - name: Parameter Brute Force (Arjun)
         run: |
-          # Arjun might fail on some domains, so we use || true to prevent crash
+          # Arjun often exits with 1 if no parameters are found; we force success
           arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
 
       - name: IP, OS, and Version Scanning (Nmap)
         run: |
           if [ -s subdomains.txt ]; then
-            # Using -Pn (No ping) is often necessary in cloud environments like GitHub Actions
+            # -Pn is critical as many targets block pings, causing Nmap to exit 1
             sudo nmap -iL subdomains.txt -F -O -sV -T4 -Pn -oN nmap_results.txt || touch nmap_results.txt
           else
             echo "No subdomains to scan with Nmap." > nmap_results.txt
@@ -103,10 +105,11 @@ jobs:
 
       - name: Notify Discord (Final Results)
         run: |
-          if [ -f nmap_results.txt ]; then
+          if [ -f nmap_results.txt ] && [ -s nmap_results.txt ]; then
+            # Escape quotes to prevent JSON payload errors in curl
             NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:" nmap_results.txt | head -n 15 | sed 's/"/\\"/g')
           else
-            NMAP_SUMMARY="No Nmap data available."
+            NMAP_SUMMARY="No Nmap data available for this target."
           fi
           
           curl -H "Content-Type: application/json" \
