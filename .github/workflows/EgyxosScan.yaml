@@ -17,15 +17,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Setup Go & Python
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
       - name: Install Security Tools
         run: |
+          sudo apt-get update && sudo apt-get install -y nmap
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          pip install arjun paramspider
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
       - name: Subdomain Discovery
@@ -37,7 +44,6 @@ jobs:
       - name: Notify Discord (Subdomains Found)
         if: steps.subfinder.outputs.count > 0
         run: |
-          # We send the count and the first few subdomains as an embed
           LIST=$(head -n 15 subdomains.txt | tr '\n' ',' | sed 's/,$//')
           curl -H "Content-Type: application/json" \
                -X POST \
@@ -53,6 +59,25 @@ jobs:
                  }]
                }' "${{ secrets.DISCORD_WEBHOOK }}"
 
+      - name: Parameter Discovery (ParamSpider)
+        run: |
+          paramspider -d ${{ github.event.inputs.target_domain || 'google.com' }} --output params.txt
+          # Clean up the output to only include URLs
+          grep "http" results/*.txt > all_params.txt || touch all_params.txt
+
+      - name: Parameter Brute Force (Arjun)
+        run: |
+          # Running Arjun on the main domain to find hidden parameters
+          arjun -u https://${{ github.event.inputs.target_domain || 'google.com' }} -o arjun_results.json
+
+      - name: IP, OS, and Version Scanning (Nmap)
+        run: |
+          # -O: OS Detection (Requires sudo)
+          # -sV: Service/Version Detection
+          # -T4: Aggressive timing for faster results in CI/CD
+          # -F: Fast scan (top 100 ports) to save time
+          sudo nmap -iL subdomains.txt -F -O -sV -T4 -oN nmap_results.txt
+
       - name: Vulnerability Scan (Nuclei)
         id: nuclei
         run: |
@@ -60,6 +85,25 @@ jobs:
           if [ -s nuclei_results.txt ]; then
             echo "vulns_found=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Notify Discord (Final Results)
+        run: |
+          # Extracting OS guesses and IPs for the Discord preview
+          NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:" nmap_results.txt | head -n 15)
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "Egyxos Recon",
+                 "embeds": [{
+                   "title": "🔍 Advanced Recon Finished",
+                   "description": "Scan for **${{ github.event.inputs.target_domain }}** included OS Fingerprinting and Versioning.",
+                   "color": 3447003,
+                   "fields": [
+                     {"name": "IP & OS Summary", "value": "```'"$NMAP_SUMMARY"'```"},
+                     {"name": "Full Reports", "value": "Check Github Artifacts for full nmap_results.txt"}
+                   ]
+                 }]
+               }' "${{ secrets.DISCORD_WEBHOOK }}"
 
       - name: Notify Discord (Vulnerabilities Found)
         if: steps.nuclei.outputs.vulns_found == 'true'
@@ -82,7 +126,10 @@ jobs:
       - name: Upload Scan Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Egyxos-Reports-${{ github.event.inputs.target_domain }}
+          name: Egyxos-Full-Reports-${{ github.event.inputs.target_domain }}
           path: |
             subdomains.txt
             nuclei_results.txt
+            nmap_results.txt
+            arjun_results.json
+            all_params.txt
