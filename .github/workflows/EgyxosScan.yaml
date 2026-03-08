@@ -1,4 +1,4 @@
-name: Egyxos Scanner Automation
+name: Egyxos Scanner (Mohammed Fathy Style)
 
 on:
   workflow_dispatch:
@@ -10,47 +10,79 @@ on:
   schedule:
     - cron: '0 */6 * * *' # Automated run every 6 hours
 
-permissions:
-  contents: write  # Allows the action to save history back to your repo
-
 jobs:
-  recon:
+  recon-scan:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Go & Python
+      - name: Setup Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
-      
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
 
-      - name: Install Tools (Subfinder & Nuclei)
+      - name: Install Security Tools
         run: |
-          sudo apt-get update && sudo apt-get install -y nmap
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          pip install requests
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
-      - name: Run Subdomain Discovery
-        # This uses the domain you type in the GitHub UI
-        run: subfinder -d ${{ github.event.inputs.target_domain || 'google.com' }} -o subdomains.txt
-
-      - name: Notify Discord & Compare
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: python scripts/egyxos_logic.py
-
-      - name: Update History in GitHub
+      - name: Subdomain Discovery
+        id: subfinder
         run: |
-          git config --local user.email "bot@egyxos.com"
-          git config --local user.name "Egyxos-Bot"
-          cp subdomains.txt subdomains_history.txt
-          git add subdomains_history.txt
-          git commit -m "Scan results for ${{ github.event.inputs.target_domain }}" || echo "No changes"
-          git push
+          subfinder -d ${{ github.event.inputs.target_domain || 'google.com' }} -o subdomains.txt
+          echo "count=$(wc -l < subdomains.txt)" >> $GITHUB_OUTPUT
+
+      - name: Notify Discord (Subdomains Found)
+        if: steps.subfinder.outputs.count > 0
+        run: |
+          # We send the count and the first few subdomains as an embed
+          LIST=$(head -n 15 subdomains.txt | tr '\n' ',' | sed 's/,$//')
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "Egyxos Scanner",
+                 "embeds": [{
+                   "title": "🚀 Subdomain Discovery Complete",
+                   "description": "Found **${{ steps.subfinder.outputs.count }}** subdomains for **${{ github.event.inputs.target_domain }}**.",
+                   "color": 3066993,
+                   "fields": [
+                     {"name": "Sample List", "value": "```'"$LIST"'```"}
+                   ]
+                 }]
+               }' "${{ secrets.DISCORD_WEBHOOK }}"
+
+      - name: Vulnerability Scan (Nuclei)
+        id: nuclei
+        run: |
+          nuclei -l subdomains.txt -severity medium,high,critical -o nuclei_results.txt
+          if [ -s nuclei_results.txt ]; then
+            echo "vulns_found=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Discord (Vulnerabilities Found)
+        if: steps.nuclei.outputs.vulns_found == 'true'
+        run: |
+          VULN_DATA=$(cat nuclei_results.txt | head -c 1500)
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "Egyxos Alerts",
+                 "embeds": [{
+                   "title": "🚨 Vulnerabilities Detected!",
+                   "description": "Critical issues found on **${{ github.event.inputs.target_domain }}**.",
+                   "color": 15158332,
+                   "fields": [
+                     {"name": "Nuclei Findings", "value": "```'"$VULN_DATA"'```"}
+                   ]
+                 }]
+               }' "${{ secrets.DISCORD_WEBHOOK }}"
+
+      - name: Upload Scan Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Egyxos-Reports-${{ github.event.inputs.target_domain }}
+          path: |
+            subdomains.txt
+            nuclei_results.txt
