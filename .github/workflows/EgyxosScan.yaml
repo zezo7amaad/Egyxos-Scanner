@@ -1,4 +1,4 @@
-name: Egyxos Scanner 
+name: Egyxos Scanner
 
 on:
   workflow_dispatch:
@@ -38,8 +38,12 @@ jobs:
       - name: Subdomain Discovery
         id: subfinder
         run: |
-          subfinder -d ${{ github.event.inputs.target_domain || 'google.com' }} -o subdomains.txt
-          echo "count=$(wc -l < subdomains.txt)" >> $GITHUB_OUTPUT
+          subfinder -d ${{ github.event.inputs.target_domain }} -o subdomains.txt || touch subdomains.txt
+          if [ -s subdomains.txt ]; then
+            echo "count=$(wc -l < subdomains.txt)" >> $GITHUB_OUTPUT
+          else
+            echo "count=0" >> $GITHUB_OUTPUT
+          fi
 
       - name: Notify Discord (Subdomains Found)
         if: steps.subfinder.outputs.count > 0
@@ -61,35 +65,50 @@ jobs:
 
       - name: Parameter Discovery (ParamSpider)
         run: |
-          paramspider -d ${{ github.event.inputs.target_domain || 'google.com' }} --output params.txt
-          # Clean up the output to only include URLs
-          grep "http" results/*.txt > all_params.txt || touch all_params.txt
+          # ParamSpider creates a directory named 'results'
+          paramspider -d ${{ github.event.inputs.target_domain }} --output params.txt || true
+          if [ -d "results" ]; then
+            grep "http" results/*.txt > all_params.txt || touch all_params.txt
+          else
+            touch all_params.txt
+          fi
 
       - name: Parameter Brute Force (Arjun)
         run: |
-          # Running Arjun on the main domain to find hidden parameters
-          arjun -u https://${{ github.event.inputs.target_domain || 'google.com' }} -o arjun_results.json
+          # Arjun might fail on some domains, so we use || true to prevent crash
+          arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
 
       - name: IP, OS, and Version Scanning (Nmap)
         run: |
-          # -O: OS Detection (Requires sudo)
-          # -sV: Service/Version Detection
-          # -T4: Aggressive timing for faster results in CI/CD
-          # -F: Fast scan (top 100 ports) to save time
-          sudo nmap -iL subdomains.txt -F -O -sV -T4 -oN nmap_results.txt
+          if [ -s subdomains.txt ]; then
+            # Using -Pn (No ping) is often necessary in cloud environments like GitHub Actions
+            sudo nmap -iL subdomains.txt -F -O -sV -T4 -Pn -oN nmap_results.txt || touch nmap_results.txt
+          else
+            echo "No subdomains to scan with Nmap." > nmap_results.txt
+          fi
 
       - name: Vulnerability Scan (Nuclei)
         id: nuclei
         run: |
-          nuclei -l subdomains.txt -severity medium,high,critical -o nuclei_results.txt
-          if [ -s nuclei_results.txt ]; then
-            echo "vulns_found=true" >> $GITHUB_OUTPUT
+          if [ -s subdomains.txt ]; then
+            nuclei -l subdomains.txt -severity medium,high,critical -o nuclei_results.txt || touch nuclei_results.txt
+            if [ -s nuclei_results.txt ]; then
+              echo "vulns_found=true" >> $GITHUB_OUTPUT
+            else
+              echo "vulns_found=false" >> $GITHUB_OUTPUT
+            fi
+          else
+             echo "vulns_found=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Notify Discord (Final Results)
         run: |
-          # Extracting OS guesses and IPs for the Discord preview
-          NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:" nmap_results.txt | head -n 15)
+          if [ -f nmap_results.txt ]; then
+            NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:" nmap_results.txt | head -n 15 | sed 's/"/\\"/g')
+          else
+            NMAP_SUMMARY="No Nmap data available."
+          fi
+          
           curl -H "Content-Type: application/json" \
                -X POST \
                -d '{
@@ -100,7 +119,7 @@ jobs:
                    "color": 3447003,
                    "fields": [
                      {"name": "IP & OS Summary", "value": "```'"$NMAP_SUMMARY"'```"},
-                     {"name": "Full Reports", "value": "Check Github Artifacts for full nmap_results.txt"}
+                     {"name": "Full Reports", "value": "Check Github Artifacts for full logs"}
                    ]
                  }]
                }' "${{ secrets.DISCORD_WEBHOOK }}"
@@ -108,14 +127,14 @@ jobs:
       - name: Notify Discord (Vulnerabilities Found)
         if: steps.nuclei.outputs.vulns_found == 'true'
         run: |
-          VULN_DATA=$(cat nuclei_results.txt | head -c 1500)
+          VULN_DATA=$(cat nuclei_results.txt | head -c 1500 | sed 's/"/\\"/g')
           curl -H "Content-Type: application/json" \
                -X POST \
                -d '{
                  "username": "Egyxos Alerts",
                  "embeds": [{
                    "title": "🚨 Vulnerabilities Detected!",
-                   "description": "Critical issues found on **${{ github.event.inputs.target_domain }}**.",
+                   "description": "Issues found on **${{ github.event.inputs.target_domain }}**.",
                    "color": 15158332,
                    "fields": [
                      {"name": "Nuclei Findings", "value": "```'"$VULN_DATA"'```"}
