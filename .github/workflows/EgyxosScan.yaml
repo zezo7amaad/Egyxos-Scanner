@@ -31,7 +31,6 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y nmap
           
       - name: Install Security Tools
         run: |
@@ -96,25 +95,7 @@ jobs:
             }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
-      # --- 4. NMAP ---
-      - name: IP & OS Scanning (Nmap)
-        run: |
-          if [ -s subdomains.txt ]; then
-            sudo nmap -iL subdomains.txt -F -O -sV -T2 --scan-delay 1s -Pn -oN nmap_results.txt || touch nmap_results.txt
-            if [ -s nmap_results.txt ]; then
-              NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:|PORT|STATE|SERVICE" nmap_results.txt | head -n 15 | sed 's/"/\\"/g')
-              curl -H "Content-Type: application/json" -X POST -d '{
-                "username": "Egyxos Nmap",
-                "embeds": [{
-                  "title": "🖥️ Infra & OS Mapping",
-                  "color": 3447003,
-                  "fields": [{"name": "Summary", "value": "```'"$NMAP_SUMMARY"'```"}]
-                }]
-              }' "${{ secrets.DISCORD_WEBHOOK }}"
-            fi
-          fi
-
-      # --- 5. NUCLEI (Optimized) ---
+      # --- 4. NUCLEI (Optimized) ---
       - name: Vulnerability Scan (Nuclei)
         run: |
           if [ -s subdomains.txt ]; then
@@ -132,7 +113,7 @@ jobs:
             fi
           fi
 
-      # --- 6. FINAL CONSOLIDATED REPORT ---
+      # --- 5. FINAL CONSOLIDATED REPORT ---
       - name: Send Final Report to Discord
         if: always()
         run: |
@@ -162,6 +143,5 @@ jobs:
           path: |
             subdomains.txt
             nuclei_results.txt
-            nmap_results.txt
             arjun_results.json
             all_params.txt
