@@ -21,7 +21,8 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
-      
+          cache: false
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -30,13 +31,12 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y nmap chromium-browser
+          sudo apt-get install -y nmap
           
       - name: Install Security Tools
         run: |
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          go install -v github.com/sensepost/gowitness@latest
           pip install git+https://github.com/devanshbatham/paramspider.git
           pip install git+https://github.com/s0md3v/Arjun.git
           echo "/home/runner/go/bin" >> $GITHUB_PATH
@@ -60,27 +60,7 @@ jobs:
             }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
-      # --- 2. GOWITNESS ---
-      - name: Capture Screenshots (GoWitness)
-        run: |
-          if [ -s subdomains.txt ]; then
-            mkdir -p screenshots
-            sed 's/^/http:\/\//' subdomains.txt > urls.txt
-            sed 's/^/https:\/\//' subdomains.txt >> urls.txt
-            # Using 'scan file' with headless chrome
-            gowitness scan file -f urls.txt --threads 5 --timeout 15 --screenshot-path ./screenshots/
-            SCREENSHOT_COUNT=$(ls -1 screenshots/*.png 2>/dev/null | wc -l || echo "0")
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "username": "Egyxos Visual",
-              "embeds": [{
-                "title": "📸 Visual Recon Complete",
-                "description": "Captured **'"$SCREENSHOT_COUNT"'** web interface screenshots for the target.",
-                "color": 10181046
-              }]
-            }' "${{ secrets.DISCORD_WEBHOOK }}"
-          fi
-
-      # --- 3. PARAMSPIDER ---
+      # --- 2. PARAMSPIDER ---
       - name: Parameter Discovery (ParamSpider)
         run: |
           paramspider -d ${{ github.event.inputs.target_domain }} || true
@@ -100,7 +80,7 @@ jobs:
             fi
           fi
 
-      # --- 4. ARJUN ---
+      # --- 3. ARJUN ---
       - name: Parameter Brute Force (Arjun)
         run: |
           arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
@@ -116,11 +96,11 @@ jobs:
             }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
-      # --- 5. NMAP ---
+      # --- 4. NMAP ---
       - name: IP & OS Scanning (Nmap)
         run: |
           if [ -s subdomains.txt ]; then
-            sudo nmap -iL subdomains.txt -F -O -sV -T4 -Pn -oN nmap_results.txt || touch nmap_results.txt
+            sudo nmap -iL subdomains.txt -F -O -sV -T2 --scan-delay 1s -Pn -oN nmap_results.txt || touch nmap_results.txt
             if [ -s nmap_results.txt ]; then
               NMAP_SUMMARY=$(grep -E "Nmap scan report|OS details|Running:|PORT|STATE|SERVICE" nmap_results.txt | head -n 15 | sed 's/"/\\"/g')
               curl -H "Content-Type: application/json" -X POST -d '{
@@ -134,11 +114,11 @@ jobs:
             fi
           fi
 
-      # --- 6. NUCLEI ---
+      # --- 5. NUCLEI (Optimized) ---
       - name: Vulnerability Scan (Nuclei)
         run: |
           if [ -s subdomains.txt ]; then
-            nuclei -l subdomains.txt -severity medium,high,critical -o nuclei_results.txt || touch nuclei_results.txt
+            nuclei -l subdomains.txt -severity medium,high,critical -c 20 -bs 5 -rl 100 -o nuclei_results.txt || touch nuclei_results.txt
             if [ -s nuclei_results.txt ]; then
               VULN_DATA=$(cat nuclei_results.txt | head -c 1000 | sed 's/"/\\"/g')
               curl -H "Content-Type: application/json" -X POST -d '{
@@ -152,6 +132,29 @@ jobs:
             fi
           fi
 
+      # --- 6. FINAL CONSOLIDATED REPORT ---
+      - name: Send Final Report to Discord
+        if: always()
+        run: |
+          SUB_COUNT=$([ -f subdomains.txt ] && wc -l < subdomains.txt || echo "0")
+          PARAM_COUNT=$([ -f all_params.txt ] && wc -l < all_params.txt || echo "0")
+          VULN_COUNT=$([ -f nuclei_results.txt ] && wc -l < nuclei_results.txt || echo "0")
+          
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "username": "Egyxos Master Bot",
+            "embeds": [{
+              "title": "🏁 Egyxos Scan Full Report: ${{ github.event.inputs.target_domain }}",
+              "description": "All scanning modules have completed. Summary of the findings:",
+              "color": 10181046,
+              "fields": [
+                {"name": "🌍 Subdomains", "value": "**'"$SUB_COUNT"'** found", "inline": true},
+                {"name": "🔗 Parameters", "value": "**'"$PARAM_COUNT"'** mined", "inline": true},
+                {"name": "🚨 Vulnerabilities", "value": "**'"$VULN_COUNT"'** issues", "inline": false}
+              ],
+              "footer": {"text": "Detailed logs available in GitHub Artifacts"}
+            }]
+          }' "${{ secrets.DISCORD_WEBHOOK }}"
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -162,4 +165,3 @@ jobs:
             nmap_results.txt
             arjun_results.json
             all_params.txt
-            screenshots/
