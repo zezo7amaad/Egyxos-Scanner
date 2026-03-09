@@ -40,6 +40,7 @@ jobs:
         run: |
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
           pip install git+https://github.com/s0md3v/Arjun.git
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
@@ -81,7 +82,20 @@ jobs:
         id: nuclei
         run: |
           if [ -s subdomains.txt ]; then
-            nuclei -l subdomains.txt -severity medium,high,critical -c 20 -bs 5 -rl 100 -o nuclei_results.txt || touch nuclei_results.txt
+            # Step 1: Filter for LIVE hosts only to avoid scanning dead subdomains (saves massive time)
+            cat subdomains.txt | httpx -silent -fc 404,500,502,503 -o live_subs.txt || touch live_subs.txt
+            
+            if [ -s live_subs.txt ]; then
+              # Optimized Flags:
+              # -t 3: Timeout after 3s for unresponsive hosts
+              # -rl 50: Limit to 50 requests per second to avoid WAF/Network ban
+              # -c 15: Run 15 templates in parallel (balanced for GH Runners)
+              # -H: Custom User-Agent to look like a real browser
+              nuclei -l live_subs.txt -severity medium,high,critical -t 3 -rl 50 -c 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" -o nuclei_results.txt || touch nuclei_results.txt
+            else
+              touch nuclei_results.txt
+            fi
+            
             if [ -s nuclei_results.txt ]; then
               echo "count=$(wc -l < nuclei_results.txt)" >> $GITHUB_OUTPUT
               echo "found=true" >> $GITHUB_OUTPUT
