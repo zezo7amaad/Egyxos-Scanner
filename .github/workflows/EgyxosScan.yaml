@@ -1,17 +1,3 @@
-# ####################################################################################
-# 🛡️ Egyxos Scanner PRO: Advanced Reconnaissance & Visual Monitor
-# 
-# Features: 
-# 1. Subfinder (Subdomain Discovery)
-# 2. GoWitness (Visual Web Screenshotting)
-# 3. ParamSpider (URL & Parameter Mining)
-# 4. Arjun (Hidden Parameter Brute Force)
-# 5. Nmap (IP, Port, OS Fingerprinting & Service Versioning)
-# 6. Nuclei (Vulnerability Assessment)
-# 
-# Real-time Visual Alerts & Multi-Tool reporting to Discord.
-# ####################################################################################
-
 name: Egyxos Scanner
 
 on:
@@ -48,18 +34,14 @@ jobs:
           
       - name: Install Security Tools
         run: |
-          # Go-based tools
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
           go install -v github.com/sensepost/gowitness@latest
-          
-          # Python-based tools
           pip install git+https://github.com/devanshbatham/paramspider.git
           pip install git+https://github.com/s0md3v/Arjun.git
-          
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
-      # --- 1. SUBFINDER (Discovery) ---
+      # --- 1. SUBFINDER ---
       - name: Subdomain Discovery
         id: subfinder
         run: |
@@ -78,30 +60,27 @@ jobs:
             }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
-      # --- 2. GOWITNESS (Visual Recon) ---
+      # --- 2. GOWITNESS ---
       - name: Capture Screenshots (GoWitness)
         run: |
           if [ -s subdomains.txt ]; then
-            # We add http/https prefixes for gowitness
+            mkdir -p screenshots
             sed 's/^/http:\/\//' subdomains.txt > urls.txt
             sed 's/^/https:\/\//' subdomains.txt >> urls.txt
-            gowitness file -f urls.txt --threads 10 --timeout 15
-            
-            # Count successful screenshots
+            # Using 'scan file' with headless chrome
+            gowitness scan file -f urls.txt --threads 5 --timeout 15 --screenshot-path ./screenshots/
             SCREENSHOT_COUNT=$(ls -1 screenshots/*.png 2>/dev/null | wc -l || echo "0")
-            
             curl -H "Content-Type: application/json" -X POST -d '{
               "username": "Egyxos Visual",
               "embeds": [{
                 "title": "📸 Visual Recon Complete",
                 "description": "Captured **'"$SCREENSHOT_COUNT"'** web interface screenshots for the target.",
-                "color": 10181046,
-                "footer": {"text": "View gallery in GitHub Artifacts"}
+                "color": 10181046
               }]
             }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
-      # --- 3. PARAMSPIDER (Mining) ---
+      # --- 3. PARAMSPIDER ---
       - name: Parameter Discovery (ParamSpider)
         run: |
           paramspider -d ${{ github.event.inputs.target_domain }} || true
@@ -113,7 +92,7 @@ jobs:
                 "username": "Egyxos ParamSpider",
                 "embeds": [{
                   "title": "🔗 Parameters Mining",
-                  "description": "Found entry points for **${{ github.event.inputs.target_domain }}**",
+                  "description": "Target: **${{ github.event.inputs.target_domain }}**",
                   "color": 15105570,
                   "fields": [{"name": "URL Preview", "value": "```'"$PARAM_LIST"'```"}]
                 }]
@@ -121,7 +100,7 @@ jobs:
             fi
           fi
 
-      # --- 4. ARJUN (Hidden Params) ---
+      # --- 4. ARJUN ---
       - name: Parameter Brute Force (Arjun)
         run: |
           arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
@@ -137,7 +116,7 @@ jobs:
             }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
-      # --- 5. NMAP (Infra) ---
+      # --- 5. NMAP ---
       - name: IP & OS Scanning (Nmap)
         run: |
           if [ -s subdomains.txt ]; then
@@ -155,7 +134,7 @@ jobs:
             fi
           fi
 
-      # --- 6. NUCLEI (Vulns) ---
+      # --- 6. NUCLEI ---
       - name: Vulnerability Scan (Nuclei)
         run: |
           if [ -s subdomains.txt ]; then
