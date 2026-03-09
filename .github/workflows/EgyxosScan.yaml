@@ -6,7 +6,7 @@ on:
       target_domain:
         description: 'Target domain to scan (e.g., example.com)'
         required: true
-        default: 'google.com'
+        default: ''
   schedule:
     - cron: '0 */6 * * *' # Automated run every 6 hours
 
