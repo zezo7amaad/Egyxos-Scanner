@@ -6,9 +6,9 @@ on:
       target_domain:
         description: 'Target domain to scan (e.g., example.com)'
         required: true
-        default: ''
+        default: 'google.com'
   schedule:
-    - cron: '0 */6 * * *' # Automated run every 6 hours
+    - cron: '0 */12 * * *' # Automated run every 6 hours
 
 jobs:
   recon-scan:
@@ -28,10 +28,14 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install System Dependencies
+      - name: Notify Discord (Scan Started)
         run: |
-          sudo apt-get update
-          
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -H "Content-Type: application/json" -X POST -d '{
+            "username": "Egyxos Recon",
+            "content": "🔍 **Scan Started**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Trigger:** workflow_dispatch\n**Tools:** Subfinder + ParamSpider + Arjun + Nuclei\n**Action Link:** '"$RUN_URL"'"
+          }' "${{ secrets.DISCORD_WEBHOOK }}"
+
       - name: Install Security Tools
         run: |
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
@@ -46,8 +50,7 @@ jobs:
         run: |
           subfinder -d ${{ github.event.inputs.target_domain }} -o subdomains.txt || touch subdomains.txt
           if [ -s subdomains.txt ]; then
-            COUNT=$(wc -l < subdomains.txt)
-            echo "count=$COUNT" >> $GITHUB_OUTPUT
+            echo "count=$(wc -l < subdomains.txt)" >> $GITHUB_OUTPUT
           else
             echo "count=0" >> $GITHUB_OUTPUT
           fi
@@ -55,140 +58,82 @@ jobs:
       - name: Notify Discord (Subfinder)
         if: steps.subfinder.outputs.count > 0
         run: |
-          LIST=$(head -n 15 subdomains.txt | sed 's/"/\\"/g' | tr '\n' '\\n')
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          LIST=$(head -n 20 subdomains.txt | sed 's/"/\\"/g' | tr '\n' '\\n')
           curl -H "Content-Type: application/json" -X POST -d '{
-            "username": "Egyxos Scanner",
-            "avatar_url": "https://i.imgur.com/8nNmT6W.png",
-            "embeds": [{
-              "title": "🔍 Subdomain Discovery Results",
-              "url": "'"$RUN_URL"'",
-              "description": "Found **${{ steps.subfinder.outputs.count }}** subdomains for **${{ github.event.inputs.target_domain }}**",
-              "color": 3066993,
-              "fields": [
-                { "name": "📡 Scanned Target", "value": "`${{ github.event.inputs.target_domain }}`", "inline": true },
-                { "name": "📊 Count", "value": "`${{ steps.subfinder.outputs.count }}`", "inline": true },
-                { "name": "📝 Subdomain List (Preview)", "value": "```\n'"$LIST"'\n```" },
-                { "name": "🔗 Access Full Results", "value": "[Click here to download artifacts]('"$RUN_URL"')" }
-              ],
-              "footer": { "text": "Egyxos Security Automation • GitHub Actions" },
-              "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"
-            }]
+            "username": "Egyxos Recon",
+            "content": "✅ **Subfinder Complete**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Subdomains Found:** ${{ steps.subfinder.outputs.count }}\n\n```\n'"$LIST"'\n```"
           }' "${{ secrets.DISCORD_WEBHOOK }}"
 
-      # --- 2. PARAMSPIDER ---
-      - name: Parameter Discovery (ParamSpider)
+      # --- 2. PARAMSPIDER & ARJUN (Combined Recon) ---
+      - name: Parameter Discovery
         run: |
           paramspider -d ${{ github.event.inputs.target_domain }} || true
+          arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
+          
           if [ -d "results" ]; then
-            grep "http" results/*.txt | head -n 20 > all_params.txt || touch all_params.txt
+            grep "http" results/*.txt | head -n 10 > all_params.txt || touch all_params.txt
             if [ -s all_params.txt ]; then
-              PARAM_LIST=$(head -n 5 all_params.txt | sed 's/"/\\"/g' | tr '\n' '\\n')
-              RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              PARAMS=$(cat all_params.txt | sed 's/"/\\"/g' | tr '\n' '\\n')
               curl -H "Content-Type: application/json" -X POST -d '{
-                "username": "Egyxos Scanner",
-                "embeds": [{
-                  "title": "🔗 Parameters Mined",
-                  "url": "'"$RUN_URL"'",
-                  "description": "Collected potential entry points and URL parameters.",
-                  "color": 15105570,
-                  "fields": [
-                    { "name": "🎯 Target", "value": "`${{ github.event.inputs.target_domain }}`", "inline": true },
-                    { "name": "📎 URLs Found", "value": "```\n'"$PARAM_LIST"'\n```" },
-                    { "name": "📂 Action Link", "value": "[View Run]('"$RUN_URL"')" }
-                  ]
-                }]
+                "username": "Egyxos Recon",
+                "content": "🔗 **Parameters Discovery Complete**\n**Target:** ${{ github.event.inputs.target_domain }}\n\n**Sample Parameters Found:**\n```\n'"$PARAMS"'\n```"
               }' "${{ secrets.DISCORD_WEBHOOK }}"
             fi
           fi
 
-      # --- 3. ARJUN ---
-      - name: Parameter Brute Force (Arjun)
-        run: |
-          arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
-          if [ -s arjun_results.json ] && [ "$(cat arjun_results.json)" != "{}" ]; then
-            ARJUN_DATA=$(cat arjun_results.json | sed 's/"/\\"/g' | head -c 500)
-            RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            curl -H "Content-Type: application/json" -X POST -d '{
-              "username": "Egyxos Scanner",
-              "embeds": [{
-                "title": "💉 Hidden Parameters Found",
-                "url": "'"$RUN_URL"'",
-                "description": "Arjun identified internal parameters via brute force.",
-                "color": 15844367,
-                "fields": [
-                  { "name": "Raw JSON Discovery", "value": "```json\n'"$ARJUN_DATA"'\n```" },
-                  { "name": "📂 Action Link", "value": "[View Run]('"$RUN_URL"')" }
-                ]
-              }]
-            }' "${{ secrets.DISCORD_WEBHOOK }}"
-          fi
-
-      # --- 4. NUCLEI (Optimized) ---
+      # --- 3. NUCLEI ---
       - name: Vulnerability Scan (Nuclei)
         id: nuclei
         run: |
           if [ -s subdomains.txt ]; then
             nuclei -l subdomains.txt -severity medium,high,critical -c 20 -bs 5 -rl 100 -o nuclei_results.txt || touch nuclei_results.txt
             if [ -s nuclei_results.txt ]; then
+              echo "count=$(wc -l < nuclei_results.txt)" >> $GITHUB_OUTPUT
               echo "found=true" >> $GITHUB_OUTPUT
             else
               echo "found=false" >> $GITHUB_OUTPUT
             fi
           fi
 
-      - name: Notify Discord (Nuclei)
+      - name: Notify Discord (Nuclei Summary)
         if: steps.nuclei.outputs.found == 'true'
         run: |
-          VULN_DATA=$(cat nuclei_results.txt | head -c 1000 | sed 's/"/\\"/g' | tr '\n' '\\n')
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           curl -H "Content-Type: application/json" -X POST -d '{
-            "username": "Egyxos Scanner",
-            "embeds": [{
-              "title": "🚨 Security Vulnerabilities Detected",
-              "url": "'"$RUN_URL"'",
-              "description": "Nuclei scanner found the following issues for **${{ github.event.inputs.target_domain }}**",
-              "color": 15158332,
-              "fields": [
-                { "name": "🚩 Findings", "value": "```\n'"$VULN_DATA"'\n```" },
-                { "name": "📥 Download Reports", "value": "[Click here to access results]('"$RUN_URL"')" }
-              ],
-              "footer": { "text": "Review full reports in GitHub Artifacts" }
-            }]
+            "username": "Egyxos Recon",
+            "content": "🚨 **Vulnerabilities Found!**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Count:** ${{ steps.nuclei.outputs.count }}\n\n*Sending each vulnerability as a separate message...*"
           }' "${{ secrets.DISCORD_WEBHOOK }}"
 
-      # --- 5. FINAL CONSOLIDATED REPORT ---
-      - name: Send Final Report to Discord
+      - name: Notify Discord (Individual Vulns)
+        if: steps.nuclei.outputs.found == 'true'
+        run: |
+          while IFS= read -r line; do
+            CLEAN_LINE=$(echo "$line" | sed 's/"/\\"/g')
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "username": "Egyxos Alerts",
+              "content": "💥 **Vulnerability Found**\n**Domain:** ${{ github.event.inputs.target_domain }}\n\n```\n'"$CLEAN_LINE"'\n```"
+            }' "${{ secrets.DISCORD_WEBHOOK }}"
+          done < nuclei_results.txt
+
+      # --- 4. FINAL REPORT ---
+      - name: Send Final Report
         if: always()
         run: |
-          SUB_COUNT=$([ -f subdomains.txt ] && wc -l < subdomains.txt || echo "0")
-          PARAM_COUNT=$([ -f all_params.txt ] && wc -l < all_params.txt || echo "0")
-          VULN_COUNT=$([ -f nuclei_results.txt ] && wc -l < nuclei_results.txt || echo "0")
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SUB_COUNT=$([ -f subdomains.txt ] && wc -l < subdomains.txt || echo "0")
+          VULN_COUNT=$([ -f nuclei_results.txt ] && wc -l < nuclei_results.txt || echo "0")
           
           curl -H "Content-Type: application/json" -X POST -d '{
-            "username": "Egyxos Master Bot",
-            "embeds": [{
-              "title": "🏁 Egyxos Scan Full Report: ${{ github.event.inputs.target_domain }}",
-              "url": "'"$RUN_URL"'",
-              "description": "All scanning modules have completed successfully. Detailed logs are available at the link below.",
-              "color": 10181046,
-              "fields": [
-                {"name": "🌍 Subdomains", "value": "**'"$SUB_COUNT"'**", "inline": true},
-                {"name": "🔗 Parameters", "value": "**'"$PARAM_COUNT"'**", "inline": true},
-                {"name": "🚨 Vulnerabilities", "value": "**'"$VULN_COUNT"'**", "inline": true},
-                {"name": "📦 Results Artifacts", "value": "[Download Results via GitHub Summary]('"$RUN_URL"')", "inline": false}
-              ],
-              "footer": {"text": "Egyxos Automated SOC Reporting"}
-            }]
+            "username": "Egyxos Master",
+            "content": "🏁 **Scan Process Finished**\n**Target:** ${{ github.event.inputs.target_domain }}\n**Total Subdomains:** '"$SUB_COUNT"'\n**Total Vulnerabilities:** '"$VULN_COUNT"'\n\n📥 **Access Results:** [Download Artifacts]('"$RUN_URL"')"
           }' "${{ secrets.DISCORD_WEBHOOK }}"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Egyxos-PRO-Reports-${{ github.event.inputs.target_domain }}
+          name: Egyxos-Reports-${{ github.event.inputs.target_domain }}
           path: |
             subdomains.txt
             nuclei_results.txt
             arjun_results.json
             all_params.txt
+           
