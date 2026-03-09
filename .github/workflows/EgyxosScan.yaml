@@ -8,7 +8,7 @@ on:
         required: true
         default: 'google.com'
   schedule:
-    - cron: '0 */12 * * *' # Automated run every 6 hours
+    - cron: '0 */12 * * *' # Automated run every 12 hours
 
 jobs:
   recon-scan:
@@ -33,14 +33,13 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           curl -H "Content-Type: application/json" -X POST -d '{
             "username": "Egyxos Recon",
-            "content": "🔍 **Scan Started**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Trigger:** workflow_dispatch\n**Tools:** Subfinder + ParamSpider + Arjun + Nuclei\n**Action Link:** '"$RUN_URL"'"
+            "content": "🔍 **Scan Started**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Trigger:** workflow_dispatch\n**Tools:** Subfinder + Arjun + Nuclei\n**Action Link:** '"$RUN_URL"'"
           }' "${{ secrets.DISCORD_WEBHOOK }}"
 
       - name: Install Security Tools
         run: |
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
           go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
-          pip install git+https://github.com/devanshbatham/paramspider.git
           pip install git+https://github.com/s0md3v/Arjun.git
           echo "/home/runner/go/bin" >> $GITHUB_PATH
 
@@ -64,21 +63,17 @@ jobs:
             "content": "✅ **Subfinder Complete**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Subdomains Found:** ${{ steps.subfinder.outputs.count }}\n\n```\n'"$LIST"'\n```"
           }' "${{ secrets.DISCORD_WEBHOOK }}"
 
-      # --- 2. PARAMSPIDER & ARJUN (Combined Recon) ---
+      # --- 2. ARJUN (Parameter Recon) ---
       - name: Parameter Discovery
         run: |
-          paramspider -d ${{ github.event.inputs.target_domain }} || true
           arjun -u https://${{ github.event.inputs.target_domain }} -o arjun_results.json || echo "{}" > arjun_results.json
           
-          if [ -d "results" ]; then
-            grep "http" results/*.txt | head -n 10 > all_params.txt || touch all_params.txt
-            if [ -s all_params.txt ]; then
-              PARAMS=$(cat all_params.txt | sed 's/"/\\"/g' | tr '\n' '\\n')
-              curl -H "Content-Type: application/json" -X POST -d '{
-                "username": "Egyxos Recon",
-                "content": "🔗 **Parameters Discovery Complete**\n**Target:** ${{ github.event.inputs.target_domain }}\n\n**Sample Parameters Found:**\n```\n'"$PARAMS"'\n```"
-              }' "${{ secrets.DISCORD_WEBHOOK }}"
-            fi
+          if [ -s arjun_results.json ] && [ "$(cat arjun_results.json)" != "{}" ]; then
+            ARJUN_DATA=$(cat arjun_results.json | sed 's/"/\\"/g' | head -c 500)
+            curl -H "Content-Type: application/json" -X POST -d '{
+              "username": "Egyxos Recon",
+              "content": "💉 **Arjun Parameter Discovery Complete**\n**Target:** ${{ github.event.inputs.target_domain }}\n\n**Hidden Parameters Found (Sample):**\n```json\n'"$ARJUN_DATA"'\n```"
+            }' "${{ secrets.DISCORD_WEBHOOK }}"
           fi
 
       # --- 3. NUCLEI ---
@@ -135,5 +130,3 @@ jobs:
             subdomains.txt
             nuclei_results.txt
             arjun_results.json
-            all_params.txt
-           
