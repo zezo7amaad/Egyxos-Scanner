@@ -28,14 +28,6 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Notify Discord (Scan Started)
-        run: |
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "username": "Egyxos Recon",
-            "content": "🔍 **Scan Started**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Trigger:** workflow_dispatch\n**Tools:** Subfinder + Arjun + Nuclei\n**Action Link:** '"$RUN_URL"'"
-          }' "${{ secrets.DISCORD_WEBHOOK }}"
-
       - name: Install Security Tools
         run: |
           go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
@@ -55,13 +47,14 @@ jobs:
             echo "count=0" >> $GITHUB_OUTPUT
           fi
 
-      - name: Notify Discord (Subfinder)
+      - name: Notify Discord (Recon Summary)
         if: steps.subfinder.outputs.count > 0
         run: |
           LIST=$(head -n 20 subdomains.txt | sed 's/"/\\"/g' | tr '\n' '\\n')
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           curl -H "Content-Type: application/json" -X POST -d '{
             "username": "Egyxos Recon",
-            "content": "✅ **Subfinder Complete**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Subdomains Found:** ${{ steps.subfinder.outputs.count }}\n\n```\n'"$LIST"'\n```"
+            "content": "✅ **Subfinder Complete**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Subdomains Found:** ${{ steps.subfinder.outputs.count }}\n**Action Link:** '"$RUN_URL"'\n\n```\n'"$LIST"'\n```"
           }' "${{ secrets.DISCORD_WEBHOOK }}"
 
       # --- 2. ARJUN (Parameter Recon) ---
@@ -82,15 +75,11 @@ jobs:
         id: nuclei
         run: |
           if [ -s subdomains.txt ]; then
-            # Step 1: Filter for LIVE hosts only to avoid scanning dead subdomains (saves massive time)
+            # Filter for LIVE hosts to prevent timeout issues
             cat subdomains.txt | httpx -silent -fc 404,500,502,503 -o live_subs.txt || touch live_subs.txt
             
             if [ -s live_subs.txt ]; then
-              # Optimized Flags:
-              # -t 3: Timeout after 3s for unresponsive hosts
-              # -rl 50: Limit to 50 requests per second to avoid WAF/Network ban
-              # -c 15: Run 15 templates in parallel (balanced for GH Runners)
-              # -H: Custom User-Agent to look like a real browser
+              # Optimized for speed and bypass
               nuclei -l live_subs.txt -severity medium,high,critical -t 3 -rl 50 -c 15 -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" -o nuclei_results.txt || touch nuclei_results.txt
             else
               touch nuclei_results.txt
@@ -109,7 +98,7 @@ jobs:
         run: |
           curl -H "Content-Type: application/json" -X POST -d '{
             "username": "Egyxos Recon",
-            "content": "🚨 **Vulnerabilities Found!**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Count:** ${{ steps.nuclei.outputs.count }}\n\n*Sending each vulnerability as a separate message...*"
+            "content": "🚨 **Vulnerabilities Found!**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Count:** ${{ steps.nuclei.outputs.count }}\n\n*Sending findings as separate messages...*"
           }' "${{ secrets.DISCORD_WEBHOOK }}"
 
       - name: Notify Discord (Individual Vulns)
