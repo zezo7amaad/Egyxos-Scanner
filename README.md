@@ -1,67 +1,244 @@
-# Egyxos
+# Egyxos Scanner
 
-Egyxos is a modular, Linux-friendly Python security reconnaissance CLI. It
-normalizes output from common security tools and can write terminal, JSON,
-CSV, HTML, or SARIF reports.
+**Egyxos** is a modular, Linux-friendly security reconnaissance CLI. It
+provides one consistent command interface for authorized asset discovery,
+HTTP enrichment, crawling, URL and parameter discovery, service enumeration,
+and non-destructive vulnerability detection.
 
-> **Authorization:** Use Egyxos only on systems you own or are explicitly
-> authorized to test. Every active scanner requires an explicit
-> `--yes-i-am-authorized` confirmation (or `EGYXOS_AUTHORIZED=1`). Private and
-> loopback targets additionally require `--allow-private`. SQLmap is disabled
-> unless it is explicitly opted into.
+It normalizes scanner output into terminal, JSON, CSV, HTML, and SARIF reports
+and handles optional external tools without silently hiding missing
+dependencies.
+
+> **Authorized use only.** Scan only systems you own or have explicit
+> permission to assess. Egyxos does not provide exploit execution, credential
+> attacks, destructive testing, persistence, evasion, or unauthorized access.
+> SQLmap is always a separate explicit opt-in operation.
 
 ## Install and use
 
+### Requirements
+
+- Linux, WSL, or a Linux server
+- Python 3.9 or newer
+- Git
+- Optional scanner tools for individual modules
+
+### Install from Git
+
 ```bash
-python -m pip install -e .
-egyxos --help
-egyxos version
-egyxos tools
-egyxos subdomains example.com --yes-i-am-authorized --format json
-egyxos recon example.com --yes-i-am-authorized --output report.json --format json
-egyxos report report.json --format sarif --output report.sarif
+sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip
+
+git clone https://github.com/zezo7amaad/Egyxos-Scanner.git
+cd Egyxos-Scanner
+
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install .
 ```
 
+Verify the installation:
+
+```bash
+egyxos --version
+egyxos --help
+egyxos tools check
+```
+
+For development installation, use:
+
+```bash
+python -m pip install -e .
+```
+
+### Install optional scanner tools
+
 The base package uses only the Python standard library. External tools are
-optional and are detected at runtime; missing tools produce structured errors
-instead of unsafe fallbacks. Commands are passed as argv lists (never through a
-shell), have timeouts and support cancellation.
+detected at runtime and missing tools are reported clearly.
 
-## Commands
+```bash
+sudo apt install -y nmap golang-go
+mkdir -p "$HOME/go/bin"
+export PATH="$HOME/go/bin:$PATH"
 
-`scan`/`recon`, `subdomains`, `http`, `crawl`, `urls`, `params`, `fuzz`,
-`ports`, `vuln`, `sqli`, `report`, `tools`, `config`, and `version` are
-available. Integrations cover Subfinder, HTTPX, Katana, ParamSpider, Arjun,
-FFUF, Nmap, Nuclei, and SQLmap. Fuzzing requires an explicit `--wordlist`.
+go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/projectdiscovery/katana/cmd/katana@latest
+go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 
-Configuration is read from `$EGYXOS_CONFIG` or
-`$XDG_CONFIG_HOME/egyxos/config.toml`:
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+egyxos tools check
+```
+
+Additional integrations include ParamSpider, Arjun, FFUF, and SQLmap. Install
+them separately according to their official documentation when required.
+
+### Run a first scan
+
+Only use a target you are authorized to test. The `--yes` flag confirms that
+authorization is present:
+
+```bash
+egyxos scan example.com \
+  --yes \
+  --profile passive \
+  --format html \
+  --output-dir results
+```
+
+The equivalent explicit authorization flag is:
+
+```bash
+egyxos scan example.com --yes-i-am-authorized --profile passive
+```
+
+Available profiles:
+
+| Profile | Purpose |
+| --- | --- |
+| `passive` | Lower-impact discovery and enrichment |
+| `standard` | Broader discovery, crawling, services, and checks |
+| `deep` | Additional crawling and explicitly controlled modules |
+
+Private and loopback targets require the additional `--allow-private` flag:
+
+```bash
+egyxos http 127.0.0.1:8000 --yes --allow-private
+```
+
+### Run individual modules
+
+```bash
+egyxos subdomains example.com --yes
+egyxos http example.com --yes
+egyxos crawl https://example.com --yes
+egyxos urls example.com --yes
+egyxos params example.com --yes
+egyxos ports example.com --yes
+egyxos vuln example.com --yes
+```
+
+Controlled content discovery requires an explicit URL and wordlist:
+
+```bash
+egyxos fuzz https://example.com/FUZZ \
+  --yes \
+  --wordlist /path/to/wordlist.txt
+```
+
+SQL injection testing is never included automatically:
+
+```bash
+egyxos sqli "https://authorized.example/item?id=1" \
+  --yes \
+  --i-understand-sqlmap
+```
+
+### Reports and output
+
+Full scans create timestamped directories:
+
+```text
+results/
+└── example.com/
+    └── 2026-09-08_133500/
+        ├── result.json
+        ├── report.html
+        └── egyxos.log
+```
+
+Supported formats are `terminal`, `json`, `csv`, `html`, and `sarif`:
+
+```bash
+egyxos scan example.com --yes --format json
+egyxos report results/example.com/TIMESTAMP --format html --output report.html
+egyxos report results/example.com/TIMESTAMP --format sarif --output report.sarif
+```
+
+### Configuration
+
+Create and inspect the default configuration:
 
 ```bash
 egyxos config init
 egyxos config show
+egyxos config path
 ```
 
-## Development
+The default file is:
 
-```bash
-python -m pytest
-python -m egyxos --help
+```text
+~/.config/egyxos/config.toml
 ```
 
-The existing GitHub Actions scanner remains available for Discord-compatible
-scheduled workflows; the Python CLI is suitable for local use and CI artifacts.
+Set `EGYXOS_CONFIG` or `XDG_CONFIG_HOME` to use a different location. Do not
+store credentials, API tokens, cookies, or authorization headers in the
+configuration file.
+
+## Command reference
+
+```text
+egyxos scan <target>       Complete authorized assessment
+egyxos recon <target>      Reconnaissance pipeline
+egyxos subdomains <target> Subdomain enumeration
+egyxos http <target>       HTTP probing and enrichment
+egyxos crawl <target>      Controlled web crawling
+egyxos urls <target>       URL discovery
+egyxos params <target>     Parameter discovery
+egyxos fuzz <url/FUZZ>     Controlled content discovery
+egyxos ports <target>      Service enumeration
+egyxos vuln <target>       Non-destructive vulnerability checks
+egyxos sqli <url>          Explicit SQL injection testing
+egyxos report <directory>  Regenerate reports
+egyxos tools check         Check optional dependencies
+egyxos config show         Show configuration
+egyxos version             Show the installed version
+```
+
+Use `egyxos <command> --help` for command-specific options such as
+`--threads`, `--timeout`, `--rate-limit`, `--scope-file`, `--quiet`, and
+`--verbose`.
 
 ## Run online with GitHub Actions
 
-The repository includes `.github/workflows/EgyxosScan.yaml`, which runs the
-Python CLI on a GitHub-hosted Linux runner and uploads reports as workflow
-artifacts. For a manual scan, open **Actions → Egyxos Authorized Scan → Run
-workflow**, enter an authorized target, and choose a profile and report format.
+The repository includes
+[`.github/workflows/EgyxosScan.yaml`](.github/workflows/EgyxosScan.yaml).
+It installs and runs the Python CLI on a GitHub-hosted Linux runner and uploads
+reports as workflow artifacts.
 
-For scheduled scans, create the repository variable `EGYXOS_TARGET` under
-**Settings → Secrets and variables → Actions → Variables**. Optionally set
-`EGYXOS_PROFILE` to `passive`, `standard`, or `deep`. Scheduled scans use the
-configured target and upload results for 14 days. Do not expose this workflow
-to untrusted contributors or accept arbitrary targets from public pull
-requests.
+### Manual workflow run
+
+1. Open the repository's **Actions** tab.
+2. Select **Egyxos Authorized Scan**.
+3. Select **Run workflow**.
+4. Enter a target you are authorized to test.
+5. Choose `passive`, `standard`, or `deep`.
+6. Choose the report format.
+7. Download the generated artifact from the completed workflow.
+
+### Scheduled workflow run
+
+Create the repository variable `EGYXOS_TARGET` under **Settings → Secrets and
+variables → Actions → Variables**. Optionally set `EGYXOS_PROFILE` to
+`passive`, `standard`, or `deep`. Scheduled scans use that configured target
+and retain artifacts for 14 days.
+
+Keep this workflow protected from untrusted users. Never accept arbitrary scan
+targets from public pull requests or expose the scanner through an
+unauthenticated web endpoint.
+
+## Development and testing
+
+```bash
+python -m pip install -e .
+python -m pytest -q
+python -m egyxos --help
+python -m egyxos tools check
+```
+
+External commands are executed with argument lists rather than shell
+interpolation, enforce timeouts, support cancellation, and return structured
+errors for missing tools or malformed output.
