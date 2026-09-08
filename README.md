@@ -219,12 +219,9 @@ reports as workflow artifacts.
 6. Choose the report format.
 7. Download the generated artifact from the completed workflow.
 
-### Scheduled workflow run
-
-Create the repository variable `EGYXOS_TARGET` under **Settings → Secrets and
-variables → Actions → Variables**. Optionally set `EGYXOS_PROFILE` to
-`passive`, `standard`, or `deep`. Scheduled scans use that configured target
-and retain artifacts for 14 days.
+The workflow intentionally has no scheduled trigger. It runs only when you
+select **Run workflow** manually, so every scan target and profile is chosen
+by the operator at launch time.
 
 Keep this workflow protected from untrusted users. Never accept arbitrary scan
 targets from public pull requests or expose the scanner through an

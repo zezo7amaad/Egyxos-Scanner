@@ -26,9 +26,6 @@ on:
           - html
           - sarif
           - csv
-  schedule:
-    - cron: "0 3 * * *"
-
 permissions:
   contents: read
 
