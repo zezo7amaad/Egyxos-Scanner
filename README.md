@@ -232,25 +232,41 @@ unauthenticated web endpoint.
 
 ## Run with Docker
 
-Build the image locally:
+Build the image locally from the repository root. The image installs the
+Egyxos CLI together with Nmap, SQLmap, Subfinder, HTTPX, Katana, Nuclei, FFUF,
+ParamSpider, and Arjun:
 
 ```bash
-docker build -t egyxos:local .
-docker run --rm egyxos:local --help
-docker run --rm egyxos:local version
+docker build -t egyxos-scanner .
 ```
 
-Run an authorized scan and keep reports on the host:
+Verify the CLI and bundled toolchain:
+
+```bash
+docker run --rm egyxos-scanner tools check
+```
+
+Run an authorized scan and keep reports on the host. The host directory is
+mounted at `/app/results` inside the container:
 
 ```bash
 mkdir -p results
 docker run --rm \
-  -v "$PWD/results:/workspace/results" \
-  egyxos:local scan example.com \
-  --yes-i-am-authorized \
-  --profile passive \
+  -v "$(pwd)/results:/app/results" \
+  egyxos-scanner scan example.com \
+  --yes \
   --format html \
-  --output-dir results
+  --output-dir /app/results
+```
+
+If a port scan uses Nmap raw-packet/SYN scanning, grant only the capabilities
+required by that authorized operation:
+
+```bash
+docker run --rm \
+  --cap-add=NET_RAW \
+  --cap-add=NET_ADMIN \
+  egyxos-scanner ports example.com --yes
 ```
 
 The published image is available from GitHub Container Registry after a
@@ -258,12 +274,12 @@ release workflow completes:
 
 ```bash
 docker pull ghcr.io/zezo7amaad/egyxos-scanner:latest
-docker run --rm ghcr.io/zezo7amaad/egyxos-scanner:latest --help
+docker run --rm ghcr.io/zezo7amaad/egyxos-scanner:latest tools check
 ```
 
-The image packages the Egyxos CLI itself. External scanner binaries remain
-optional dependencies and should be added to a purpose-built image or run
-from the host when using integrations that require them.
+The image is intended for authorized assessments. Do not expose it as an
+unauthenticated public scanning service or accept arbitrary targets from
+untrusted users.
 
 ## Development and testing
 
