@@ -230,6 +230,41 @@ Keep this workflow protected from untrusted users. Never accept arbitrary scan
 targets from public pull requests or expose the scanner through an
 unauthenticated web endpoint.
 
+## Run with Docker
+
+Build the image locally:
+
+```bash
+docker build -t egyxos:local .
+docker run --rm egyxos:local --help
+docker run --rm egyxos:local version
+```
+
+Run an authorized scan and keep reports on the host:
+
+```bash
+mkdir -p results
+docker run --rm \
+  -v "$PWD/results:/workspace/results" \
+  egyxos:local scan example.com \
+  --yes-i-am-authorized \
+  --profile passive \
+  --format html \
+  --output-dir results
+```
+
+The published image is available from GitHub Container Registry after a
+release workflow completes:
+
+```bash
+docker pull ghcr.io/zezo7amaad/egyxos-scanner:latest
+docker run --rm ghcr.io/zezo7amaad/egyxos-scanner:latest --help
+```
+
+The image packages the Egyxos CLI itself. External scanner binaries remain
+optional dependencies and should be added to a purpose-built image or run
+from the host when using integrations that require them.
+
 ## Development and testing
 
 ```bash
