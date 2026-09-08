@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "egyxos"
+version = "0.1.0"
+description = "A safe, modular and Linux-friendly security reconnaissance CLI."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Egyxos contributors"}]
+dependencies = []
+
+[project.optional-dependencies]
+cli = ["typer>=0.9", "rich>=13"]
+test = ["pytest>=7"]
+
+[project.scripts]
+egyxos = "egyxos.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["egyxos*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

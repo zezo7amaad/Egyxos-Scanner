@@ -1,147 +1,67 @@
-🛡️ Egyxos Scanner: Advanced Recon & Vulnerability Monitor
+# Egyxos
 
-Automate your professional reconnaissance and vulnerability scanning pipeline using GitHub Actions. This repository provides an integrated security workflow inspired by professional Bug Bounty methodologies.
+Egyxos is a modular, Linux-friendly Python security reconnaissance CLI. It
+normalizes output from common security tools and can write terminal, JSON,
+CSV, HTML, or SARIF reports.
 
-Egyxos Scanner combines subdomain discovery, parameter mining, OS fingerprinting, and vulnerability scanning into a single, automated CI/CD pipeline that reports directly to your Discord SOC (Security Operations Center).
+> **Authorization:** Use Egyxos only on systems you own or are explicitly
+> authorized to test. Every active scanner requires an explicit
+> `--yes-i-am-authorized` confirmation (or `EGYXOS_AUTHORIZED=1`). Private and
+> loopback targets additionally require `--allow-private`. SQLmap is disabled
+> unless it is explicitly opted into.
 
-🚀 Features
+## Install and use
 
-🧭 Advanced Reconnaissance
-
-Continuous Monitoring: Runs every 6 hours (configurable via cron) or manually via ```workflow_dispatch```.
-
-Subdomain Discovery: Uses Subfinder for fast, multi-source subdomain enumeration.
-
-Parameter Mining: Integrates ParamSpider to find URLs with parameters and Arjun to brute-force hidden parameters.
-
-Deep Scanning: Uses Nmap with ```sudo``` privileges for Service Versioning and OS Fingerprinting (IP & OS Detection).
-
-🧨 Vulnerability Assessment
-
-Automated Scanning: Runs Nuclei on all discovered subdomains to identify security issues.
-
-Severity Filtering: Automatically filters for ```critical```, ```high```, and ```medium```vulnerabilities.
-
-Smart Notifications: Generates detailed Discord embed notifications with color-coded alerts (Green for Recon, Red for Vulnerabilities).
-
-Artifact Management: Automatically uploads scan results (```subdomains.txt```, ```nmap_results.txt```, ```nuclei_results.txt```, etc.) to GitHub Actions for manual review.
-
-🛠️ Requirements
-
-A GitHub repository (Private recommended).
-
-GitHub Actions enabled.
-
-Secrets configured in your repository:
-
-```DISCORD_WEBHOOK```: Your Discord channel webhook URL.
-
-⚙️ Setup
-
-Clone/Copy the Workflow:
-Place the workflow file in your repository at: ```.github/workflows/EgyxosScan.yaml```
-
-Configure Discord Webhook:
-
-Go to your Discord Server Settings → Integrations → Webhooks.
-
-Create a New Webhook and copy the URL.
-
-In your GitHub Repo, go to Settings → Secrets and variables → Actions.
-
-Click New repository secret.
-
-Name: ```DISCORD_WEBHOOK```
-
-Value: ```https://discord.com/api/webhooks/your_id/your_token```
-
-(Optional) Adjust Schedule:
-In EgyxosScan.yaml, modify the cron line to change the frequency:
-```
-- cron: '0 */6 * * *' # Every 6 hours
+```bash
+python -m pip install -e .
+egyxos --help
+egyxos version
+egyxos tools
+egyxos subdomains example.com --yes-i-am-authorized --format json
+egyxos recon example.com --yes-i-am-authorized --output report.json --format json
+egyxos report report.json --format sarif --output report.sarif
 ```
 
-🔧 Manual Execution
+The base package uses only the Python standard library. External tools are
+optional and are detected at runtime; missing tools produce structured errors
+instead of unsafe fallbacks. Commands are passed as argv lists (never through a
+shell), have timeouts and support cancellation.
 
-You can trigger a scan for any specific target at any time:
+## Commands
 
-Go to the Actions tab in your GitHub repository.
+`scan`/`recon`, `subdomains`, `http`, `crawl`, `urls`, `params`, `fuzz`,
+`ports`, `vuln`, `sqli`, `report`, `tools`, `config`, and `version` are
+available. Integrations cover Subfinder, HTTPX, Katana, ParamSpider, Arjun,
+FFUF, Nmap, Nuclei, and SQLmap. Fuzzing requires an explicit `--wordlist`.
 
-Select Egyxos Scanner from the left sidebar.
+Configuration is read from `$EGYXOS_CONFIG` or
+`$XDG_CONFIG_HOME/egyxos/config.toml`:
 
-Click the Run workflow dropdown.
-
-Enter the target domain (e.g., ```example.com```) and click Run workflow.
-
-📊 Example Discord Notifications
-
-🔍 Recon Summary Embed
-
-Egyxos Recon Finished
-Target: example.com
-IP & OS Summary:
-```
-Nmap scan report for sub.example.com (192.168.1.1)
-OS details: Linux 5.x | Ubuntu 22.04
-Service: nginx 1.18.0
+```bash
+egyxos config init
+egyxos config show
 ```
 
-🚨 Vulnerability Alert
+## Development
 
-Vulnerabilities Detected!
-Target: example.com
-Nuclei Findings:
+```bash
+python -m pytest
+python -m egyxos --help
 ```
-[critical] CVE-2023-XXXXX - [https://sub.example.com/exploit](https://sub.example.com/exploit)
-[high] Exposed .env file - [https://sub.example.com/.env](https://sub.example.com/.env)
-```
-```
-🧩 Tools Integrated
 
-Tool
+The existing GitHub Actions scanner remains available for Discord-compatible
+scheduled workflows; the Python CLI is suitable for local use and CI artifacts.
 
-Description
+## Run online with GitHub Actions
 
-Subfinder
+The repository includes `.github/workflows/EgyxosScan.yaml`, which runs the
+Python CLI on a GitHub-hosted Linux runner and uploads reports as workflow
+artifacts. For a manual scan, open **Actions → Egyxos Authorized Scan → Run
+workflow**, enter an authorized target, and choose a profile and report format.
 
-Passive/Active Subdomain enumeration.
-
-ParamSpider
-
-Extracts parameters from web archives for the target.
-
-Arjun
-
-Finds hidden HTTP parameters using brute force.
-
-Nmap
-
-Network discovery, OS fingerprinting, and Version detection.
-
-Nuclei
-```
-Template-based vulnerability scanner for modern stacks.
-
-📦 Artifacts
-
-After each run, GitHub Actions will upload the following files. You can download these under the Artifacts section of the workflow run summary:
-
-``subdomains.txt``
-
-``nmap_results.txt``
-
-``nuclei_results.txt``
-
-``arjun_results.json``
-
-``all_params.txt``
-
-🧠 Roadmap
-
-[ ] Integrate HTTPx for live host verification and technology stack detection.
-
-[ ] Add Screenshotting support for discovered subdomains.
-
-[ ] Implement Slack/Telegram notification alternatives.
-
-Disclaimer: This tool is intended for authorized security testing and educational purposes only. Always obtain permission before scanning any infrastructure.
+For scheduled scans, create the repository variable `EGYXOS_TARGET` under
+**Settings → Secrets and variables → Actions → Variables**. Optionally set
+`EGYXOS_PROFILE` to `passive`, `standard`, or `deep`. Scheduled scans use the
+configured target and upload results for 14 days. Do not expose this workflow
+to untrusted contributors or accept arbitrary targets from public pull
+requests.

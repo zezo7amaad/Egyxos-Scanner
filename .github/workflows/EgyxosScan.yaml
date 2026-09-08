@@ -1,76 +1,96 @@
-name: Egyxos Scanner
+name: Egyxos Authorized Scan
 
 on:
   workflow_dispatch:
     inputs:
       target_domain:
-        description: 'Target domain to scan (e.g., example.com)'
+        description: "Hostname or URL you own or are authorized to test"
         required: true
-        default: ''
+        type: string
+      profile:
+        description: "Scan profile"
+        required: true
+        default: "passive"
+        type: choice
+        options:
+          - passive
+          - standard
+          - deep
+      format:
+        description: "Primary report format"
+        required: true
+        default: "sarif"
+        type: choice
+        options:
+          - json
+          - html
+          - sarif
+          - csv
   schedule:
-    - cron: '0 */12 * * *' # Automated run every 12 hours
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: read
 
 jobs:
-  recon-scan:
+  scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TARGET: ${{ inputs.target_domain || vars.EGYXOS_TARGET }}
+      PROFILE: ${{ inputs.profile || vars.EGYXOS_PROFILE || 'passive' }}
+      FORMAT: ${{ inputs.format || 'sarif' }}
     steps:
-      - name: Checkout Repository
+      - name: Validate configured target
+        run: |
+          test -n "$TARGET" || {
+            echo "::error::Set the target_domain input or the EGYXOS_TARGET repository variable."
+            exit 2
+          }
+
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Setup Go
-        uses: actions/setup-go@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          go-version: '1.21'
-          cache: false
+          python-version: "3.11"
+          cache: pip
 
-      - name: Notify Discord (Scan Started)
+      - name: Install Egyxos
+        run: python -m pip install .
+
+      - name: Install passive toolchain
+        if: env.PROFILE == 'passive'
         run: |
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "username": "ReconGL",
-            "content": "🔍 **Scan Started**\n**Domain:** ${{ github.event.inputs.target_domain }}\n**Trigger:** workflow_dispatch\n**Tools:** Subfinder\n**Action Link:** '"$RUN_URL"'"
-          }' "${{ secrets.DISCORD_WEBHOOK }}"
+          sudo apt-get update
+          sudo apt-get install -y nmap
 
-      - name: Install Security Tools
+      - name: Install standard toolchain
+        if: env.PROFILE == 'standard' || env.PROFILE == 'deep'
         run: |
-          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-          echo "/home/runner/go/bin" >> $GITHUB_PATH
+          sudo apt-get update
+          sudo apt-get install -y nmap
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+          go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+          go install github.com/projectdiscovery/katana/cmd/katana@latest
+          go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 
-      # --- 1. SUBFINDER ---
-      - name: Subdomain Discovery
-        id: subfinder
+      - name: Run authorized Egyxos scan
         run: |
-          subfinder -d ${{ github.event.inputs.target_domain }} -o subdomains.txt || touch subdomains.txt
-          if [ -s subdomains.txt ]; then
-            echo "count=$(wc -l < subdomains.txt)" >> $GITHUB_OUTPUT
-          else
-            echo "count=0" >> $GITHUB_OUTPUT
-          fi
+          mkdir -p online-results
+          egyxos scan "$TARGET" \
+            --yes-i-am-authorized \
+            --profile "$PROFILE" \
+            --format "$FORMAT" \
+            --output-dir online-results
 
-      - name: Notify Discord (Subfinder)
-        if: steps.subfinder.outputs.count > 0
-        run: |
-          # Formatting the list to look like the video: \n before each domain inside a code block
-          LIST=$(cat subdomains.txt | sed 's/"/\\"/g' | tr '\n' '\\n')
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "username": "ReconGL",
-            "content": "✅ **Subfinder Complete**\\n**Domain:** ${{ github.event.inputs.target_domain }}\\n**Subdomains Found:** ${{ steps.subfinder.outputs.count }}\\n\\n```\\n'"$LIST"'\\n```"
-          }' "${{ secrets.DISCORD_WEBHOOK }}"
-
-      # --- 2. FINAL REPORT ---
-      - name: Send Final Report
+      - name: Upload scan reports
         if: always()
-        run: |
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          SUB_COUNT=$([ -f subdomains.txt ] && wc -l < subdomains.txt || echo "0")
-          
-          curl -H "Content-Type: application/json" -X POST -d '{
-            "username": "ReconGL",
-            "content": "🏁 **Subdomain Scan Finished**\n**Target:** ${{ github.event.inputs.target_domain }}\n**Total Subdomains:** '"$SUB_COUNT"'\n\n📥 **Access Results:** [Download Artifacts]('"$RUN_URL"')"
-          }' "${{ secrets.DISCORD_WEBHOOK }}"
-
-      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Egyxos-Subdomains-${{ github.event.inputs.target_domain }}
-          path: subdomains.txt
+          name: egyxos-${{ github.run_number }}
+          path: online-results/
+          if-no-files-found: warn
+          retention-days: 14
