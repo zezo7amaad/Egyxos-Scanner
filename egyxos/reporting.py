@@ -65,9 +65,19 @@ def render_sarif(result: ScanResult) -> str:
 
 
 def render_terminal(result: ScanResult) -> str:
-    lines = [f"{result.scanner}: {result.target}", f"Assets: {len(result.assets)}  Findings: {len(result.findings)}"]
-    lines.extend(f"  [{finding.severity}] {finding.title}" for finding in result.findings)
-    lines.extend(f"  {asset.kind}: {asset.value}" for asset in result.assets)
+    lines = [
+        f"Egyxos | {result.scanner}",
+        f"Target: {result.target}",
+        f"Assets: {len(result.assets)} | Findings: {len(result.findings)}",
+    ]
+    if result.raw_output.strip():
+        lines.extend(["", "Tool output", "-----------", result.raw_output.rstrip()])
+    if result.findings:
+        lines.extend(["", "Findings", "--------"])
+        lines.extend(f"[{finding.severity}] {finding.title}" for finding in result.findings)
+    if result.assets and not result.raw_output.strip():
+        lines.extend(["", "Assets", "------"])
+        lines.extend(f"{asset.kind}: {asset.value}" for asset in result.assets)
     lines.extend(f"  error: {error.get('message', error)}" for error in result.errors)
     return "\n".join(lines)
 
