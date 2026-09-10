@@ -149,6 +149,18 @@ def test_ffuf_parses_path_status_results():
     assert values == ["https://example.com/admin", "https://example.com/login"]
 
 
+def test_sqlmap_command_is_not_reported_as_findings():
+    from egyxos.integrations.sqlmap import SqlmapScanner
+
+    context = ScanContext(
+        "example.com", requested_target="https://example.com/item?id=1",
+        authorized=True, config={"sqlmap_opt_in": True},
+    )
+    scanner = SqlmapScanner()
+    assert scanner._result_value("[INFO] testing parameter") is None
+    assert "--batch" in scanner.command(context)
+
+
 def test_cli_help_and_tools(capsys):
     assert main(["tools", "--json"]) == 0
     output = capsys.readouterr().out
