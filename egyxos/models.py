@@ -33,6 +33,8 @@ class Finding:
     remediation: Optional[str] = None
     source: Optional[str] = None  # compatibility alias for older result files
     metadata: Dict[str, Any] = field(default_factory=dict)
+    parameter: Optional[str] = None
+    injection_type: Optional[str] = None
 
 
 @dataclass

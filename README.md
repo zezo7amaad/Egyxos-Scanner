@@ -152,6 +152,18 @@ egyxos report result.json --format html --output report.html
 egyxos report result.json --format sarif --output report.sarif
 ```
 
+Finding exports use a stable schema:
+
+```text
+target, parameter, injection_type, evidence, confidence, severity, remediation
+```
+
+The pipeline runs modular stages in order: scope validation, subdomain
+discovery, HTTP enrichment, crawling, parameter discovery, content discovery,
+service enumeration, vulnerability checks, the explicit SQLmap opt-in,
+finding normalization, and reporting. Missing optional tools are recorded as
+actionable errors without stopping the remaining stages.
+
 ### Configuration
 
 Create and inspect the default configuration:

@@ -5,7 +5,7 @@ import pytest
 from egyxos.cli import main
 from egyxos.context import ScanContext
 from egyxos.errors import AuthorizationError, ScopeError
-from egyxos.models import Asset, ScanResult
+from egyxos.models import Asset, Finding, ScanResult
 from egyxos.reporting import render_csv, render_html, render_sarif, render_terminal
 from egyxos.scope import in_scope, normalize_target
 
@@ -29,9 +29,11 @@ def test_authorization_is_required():
 
 def test_report_formats_are_valid():
     result = ScanResult("test", "example.com", assets=[Asset("https://example.com")])
-    result.findings.append(__import__("egyxos.models", fromlist=["Finding"]).Finding("test", severity="high"))
+    result.findings.append(Finding("test", parameter="id", injection_type="sqli",
+                                   severity="high"))
     assert "example.com" in render_html(result)
     assert "asset" in render_csv(result)
+    assert "injection_type" in render_csv(result)
     assert json.loads(render_sarif(result))["version"] == "2.1.0"
 
 

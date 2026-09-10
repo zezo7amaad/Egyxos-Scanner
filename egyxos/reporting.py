@@ -52,29 +52,42 @@ def render_json(result: ScanResult, *, pretty: bool = True) -> str:
 def render_csv(result: ScanResult) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["type", "value", "severity", "title", "target", "source", "description"])
+    writer.writerow(["target", "parameter", "injection_type", "evidence",
+                     "confidence", "severity", "remediation"])
     for asset in result.assets:
-        writer.writerow(["asset", asset.value, "", "", "", asset.source or "", ""])
+        writer.writerow([asset.value, "", "asset", asset.source or "",
+                         "", "info", ""])
     for finding in result.findings:
-        writer.writerow(["finding", finding.evidence or "", finding.severity, finding.title,
-                         finding.target or "", finding.source or "", finding.description])
+        writer.writerow([
+            finding.target or result.target,
+            finding.parameter or finding.endpoint or "",
+            finding.injection_type or finding.title,
+            finding.evidence or finding.description,
+            finding.confidence,
+            finding.severity,
+            finding.remediation or "",
+        ])
     return output.getvalue()
 
 
 def render_html(result: ScanResult) -> str:
     rows = []
-    for asset in result.assets:
-        rows.append("<tr><td>asset</td><td>{}</td><td></td><td>{}</td></tr>".format(
-            html.escape(asset.value), html.escape(asset.source or "")))
     for finding in result.findings:
-        rows.append("<tr><td>finding</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
-            html.escape(finding.evidence or ""), html.escape(finding.severity),
-            html.escape(finding.title)))
+        rows.append("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>"
+                    "<td>{}</td><td>{}</td></tr>".format(
+            html.escape(finding.target or result.target),
+            html.escape(finding.parameter or finding.endpoint or ""),
+            html.escape(finding.injection_type or finding.title),
+            html.escape(finding.evidence or finding.description),
+            html.escape(finding.confidence),
+            html.escape(finding.severity),
+            html.escape(finding.remediation or "")))
     return """<!doctype html><html lang="en"><meta charset="utf-8">
 <title>Egyxos report</title><style>body{{font:16px system-ui;max-width:1100px;margin:auto}}
 table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ddd;padding:.5rem}}</style>
 <h1>Egyxos report</h1><p>Scanner: <b>{}</b> &middot; Target: <b>{}</b></p>
-<table><thead><tr><th>Type</th><th>Value/evidence</th><th>Severity</th><th>Source/title</th></tr></thead>
+<table><thead><tr><th>Target</th><th>Parameter</th><th>Injection type</th><th>Evidence</th>
+<th>Confidence</th><th>Severity</th><th>Remediation</th></tr></thead>
 <tbody>{}</tbody></table></html>""".format(html.escape(result.scanner), html.escape(result.target), "".join(rows))
 
 
@@ -142,6 +155,18 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
                 label = severity.upper().ljust(10)
                 lines.append(_color(f"{label} {severity_counts[severity]}",
                                     SEVERITY_COLORS[severity], color))
+        lines.extend(["", _color("Finding details", "bold", color),
+                      _color("─" * width, "dim", color)])
+        for finding in result.findings:
+            location = finding.parameter or finding.endpoint or finding.target or result.target
+            kind = finding.injection_type or finding.title
+            lines.append(
+                f"{_color(finding.severity.upper(), SEVERITY_COLORS.get(finding.severity.lower(), 'dim'), color)} "
+                f"{kind} @ {location} [{finding.confidence}]")
+            if finding.evidence:
+                lines.append(f"  evidence: {finding.evidence}")
+            if finding.remediation:
+                lines.append(f"  remediation: {finding.remediation}")
     if result.assets:
         grouped_assets = {}
         for asset in result.assets:
