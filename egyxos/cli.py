@@ -38,25 +38,25 @@ TOOLS = {
 
 def _common(parser):
     parser.add_argument("target", help="Authorized hostname, IP, CIDR, or http(s) URL")
-    parser.add_argument("--yes-i-am-authorized", "--yes", action="store_true",
+    parser.add_argument("--yes-i-am-authorized", "--yes", "-y", action="store_true",
                         help="Confirm you own or are explicitly authorized to test the target")
-    parser.add_argument("--allow-private", action="store_true",
+    parser.add_argument("--allow-private", "-P", action="store_true",
                         help="Allow private/loopback targets (still requires authorization)")
-    parser.add_argument("--timeout", type=float, default=None, help="Per-tool timeout in seconds")
-    parser.add_argument("--threads", type=int, default=10, help="Concurrent workers (default: 10)")
-    parser.add_argument("--rate-limit", type=float, default=None, help="Requests per second")
-    parser.add_argument("--scope-file", type=Path, help="File containing additional authorized hosts")
-    parser.add_argument("--quiet", action="store_true", help="Suppress non-result output")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose progress output")
-    parser.add_argument("--no-color", action="store_true", help="Disable colored terminal output")
-    parser.add_argument("--debug", action="store_true", help="Enable debug diagnostics")
+    parser.add_argument("--timeout", "-x", type=float, default=None, help="Per-tool timeout in seconds")
+    parser.add_argument("--threads", "-T", type=int, default=10, help="Concurrent workers (default: 10)")
+    parser.add_argument("--rate-limit", "-R", type=float, default=None, help="Requests per second")
+    parser.add_argument("--scope-file", "-S", type=Path, help="File containing additional authorized hosts")
+    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress non-result output")
+    parser.add_argument("--verbose", "-V", action="store_true", help="Enable verbose progress output")
+    parser.add_argument("--no-color", "-C", action="store_true", help="Disable colored terminal output")
+    parser.add_argument("--debug", "-D", action="store_true", help="Enable debug diagnostics")
     parser.add_argument("--output", "-o", type=Path, help="Write a report to this file")
-    parser.add_argument("--format", choices=("terminal", "json", "csv", "html", "sarif"),
+    parser.add_argument("--format", "-F", choices=("terminal", "json", "csv", "html", "sarif"),
                         default="terminal", help="Report format (default: terminal)")
     parser.add_argument("--json", action="store_const", const="json", dest="format",
                         help="Shorthand for --format json")
-    parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument("--wordlist", type=Path, help="Wordlist for fuzz")
+    parser.add_argument("--output-dir", "-O", type=Path, default=None)
+    parser.add_argument("--wordlist", "-w", type=Path, help="Wordlist for fuzz")
 
 
 def build_parser():
@@ -69,8 +69,8 @@ def build_parser():
     ):
         command = sub.add_parser(name, help=description)
         _common(command)
-        command.add_argument("--include-vuln", action="store_true", help="Include nuclei checks")
-        command.add_argument("--profile", choices=("passive", "standard", "deep", "active"),
+        command.add_argument("--include-vuln", "-v", action="store_true", help="Include nuclei checks")
+        command.add_argument("--profile", "-M", choices=("passive", "standard", "deep", "active"),
                              default="standard")
         command.add_argument("--only", help="Comma-separated scanner names to run")
         command.add_argument("--exclude", help="Comma-separated scanner names to skip")
@@ -78,7 +78,7 @@ def build_parser():
         command.add_argument("--no-subdomains", action="store_true")
         command.add_argument("--no-ports", action="store_true")
         command.add_argument("--no-vuln", action="store_true")
-        command.add_argument("--severity", default="info", help="Minimum severity")
+        command.add_argument("--severity", "-L", default="info", help="Minimum severity")
     for name, aliases, description in (
         ("subdomains", ("-d", "-s"), "Discover subdomains with subfinder"),
         ("http", ("-h",), "Probe HTTP services with httpx"),

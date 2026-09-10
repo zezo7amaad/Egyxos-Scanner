@@ -232,6 +232,15 @@ Use `egyxos <command> --help` for command-specific options such as
 `--threads`, `--timeout`, `--rate-limit`, `--scope-file`, `--quiet`,
 `--verbose`, and `--no-color`.
 
+Short option aliases are also available:
+
+```text
+-y authorization   -P allow private   -x timeout       -T threads
+-R rate limit      -S scope file      -q quiet         -V verbose
+-C no color        -D debug           -F format        -O output dir
+-w wordlist        -M profile         -L severity
+```
+
 ## Run online with GitHub Actions
 
 The repository includes

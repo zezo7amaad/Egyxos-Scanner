@@ -131,6 +131,17 @@ def test_short_scan_command_aliases():
     assert parser.parse_args(["-p", "example.com", "--yes"]).command == "-p"
     assert parser.parse_args(["-f", "example.com", "--yes"]).command == "-f"
     assert parser.parse_args(["-n", "example.com", "--yes"]).command == "-n"
+    options = parser.parse_args([
+        "scan", "example.com", "-y", "-x", "30", "-T", "20", "-R", "50",
+        "-S", "scope.txt", "-q", "-V", "-C", "-D", "-F", "json",
+        "-O", "results", "-w", "words.txt", "-M", "deep", "-L", "high",
+    ])
+    assert options.yes_i_am_authorized is True
+    assert options.timeout == 30
+    assert options.threads == 20
+    assert options.rate_limit == 50
+    assert options.format == "json"
+    assert options.profile == "deep"
 
 
 def test_methodology_catalog_and_plan():
