@@ -125,6 +125,12 @@ def test_short_scan_command_aliases():
     assert parser.parse_args(["-d", "example.com", "--yes"]).command == "-d"
     assert parser.parse_args(["-s", "example.com", "--yes"]).command == "-s"
     assert parser.parse_args(["-v", "example.com", "--yes"]).command == "-v"
+    assert parser.parse_args(["-h", "example.com", "--yes"]).command == "-h"
+    assert parser.parse_args(["-c", "example.com", "--yes"]).command == "-c"
+    assert parser.parse_args(["-u", "example.com", "--yes"]).command == "-u"
+    assert parser.parse_args(["-p", "example.com", "--yes"]).command == "-p"
+    assert parser.parse_args(["-f", "example.com", "--yes"]).command == "-f"
+    assert parser.parse_args(["-n", "example.com", "--yes"]).command == "-n"
 
 
 def test_methodology_catalog_and_plan():

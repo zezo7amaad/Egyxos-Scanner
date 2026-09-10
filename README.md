@@ -212,7 +212,15 @@ egyxos ports <target>      Service enumeration
 egyxos vuln <target>       Non-destructive vulnerability checks
 egyxos -d <target>         Short form for subdomain discovery
 egyxos -s <target>         Short form for subdomain discovery
+egyxos -h <target>         Short form for HTTP probing
+egyxos -c <target>         Short form for crawling
+egyxos -u <target>         Short form for URL discovery
+egyxos -p <target>         Short form for parameter discovery
+egyxos -f <url/FUZZ>       Short form for fuzzing
+egyxos -n <target>         Short form for port scanning
 egyxos -v <target>         Short form for vulnerability checks
+egyxos -t check            Short form for tool checks
+egyxos -m                  Short form for methodology
 egyxos sqli <url>          Explicit SQL injection testing
 egyxos report <directory>  Regenerate reports
 egyxos tools check         Check optional dependencies

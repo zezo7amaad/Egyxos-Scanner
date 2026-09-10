@@ -81,12 +81,12 @@ def build_parser():
         command.add_argument("--severity", default="info", help="Minimum severity")
     for name, aliases, description in (
         ("subdomains", ("-d", "-s"), "Discover subdomains with subfinder"),
-        ("http", (), "Probe HTTP services with httpx"),
-        ("crawl", (), "Crawl a target with katana"),
-        ("urls", (), "Discover archived URLs with paramspider"),
-        ("params", (), "Discover hidden parameters with arjun"),
-        ("fuzz", (), "Fuzz a URL with ffuf (requires --wordlist)"),
-        ("ports", (), "Scan services with nmap"),
+        ("http", ("-h",), "Probe HTTP services with httpx"),
+        ("crawl", ("-c",), "Crawl a target with katana"),
+        ("urls", ("-u",), "Discover archived URLs with paramspider"),
+        ("params", ("-p",), "Discover hidden parameters with arjun"),
+        ("fuzz", ("-f",), "Fuzz a URL with ffuf (requires --wordlist)"),
+        ("ports", ("-n",), "Scan services with nmap"),
         ("vuln", ("-v",), "Run nuclei vulnerability templates"),
     ):
         command = sub.add_parser(name, aliases=list(aliases), help=description)
@@ -95,18 +95,18 @@ def build_parser():
     _common(sqli)
     sqli.add_argument("--i-understand-sqlmap", action="store_true",
                       help="Explicitly opt into sqlmap testing")
-    report = sub.add_parser("report", help="Convert a JSON result to a report format")
+    report = sub.add_parser("report", aliases=["-r"], help="Convert a JSON result to a report format")
     report.add_argument("input", type=Path)
     report.add_argument("--format", choices=("terminal", "json", "csv", "html", "sarif"), default="terminal")
     report.add_argument("--output", "-o", type=Path)
-    tools = sub.add_parser("tools", help="Manage optional scanner dependencies")
+    tools = sub.add_parser("tools", aliases=["-t"], help="Manage optional scanner dependencies")
     tools.add_argument("action", choices=("list", "check", "versions"), nargs="?", default="check")
     tools.add_argument("--json", action="store_true", help="Output machine-readable JSON")
-    config = sub.add_parser("config", help="Show or initialize configuration")
+    config = sub.add_parser("config", aliases=["-g"], help="Show or initialize configuration")
     config.add_argument("action", choices=("show", "init", "path"), nargs="?", default="show")
     config.add_argument("--path", type=Path)
-    sub.add_parser("version", help="Print the Egyxos version")
-    methodology = sub.add_parser("methodology", help="Show the modular reconnaissance methodology")
+    sub.add_parser("version", aliases=["-V"], help="Print the Egyxos version")
+    methodology = sub.add_parser("methodology", aliases=["-m"], help="Show the modular reconnaissance methodology")
     methodology.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     return parser
 
@@ -176,6 +176,12 @@ def _report(args):
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    args.command = {
+        "-d": "subdomains", "-s": "subdomains", "-h": "http",
+        "-c": "crawl", "-u": "urls", "-p": "params", "-f": "fuzz",
+        "-n": "ports", "-v": "vuln", "-r": "report", "-t": "tools",
+        "-g": "config", "-V": "version", "-m": "methodology",
+    }.get(args.command, args.command)
     try:
         if args.command == "version":
             print(__version__)
@@ -232,12 +238,7 @@ def main(argv=None):
                                   no_subdomains=args.no_subdomains, no_ports=args.no_ports,
                                   no_vuln=args.no_vuln)
         else:
-            scanner_name = {
-                "subdomains": "subfinder",
-                "-d": "subfinder",
-                "-s": "subfinder",
-                "-v": "vuln",
-            }.get(args.command, args.command)
+            scanner_name = {"subdomains": "subfinder"}.get(args.command, args.command)
             result = run_scanner(scanner_name, context)
         return _emit(result, args)
     except (EgyxosError, OSError, ValueError, json.JSONDecodeError) as exc:
