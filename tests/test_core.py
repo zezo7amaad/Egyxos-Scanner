@@ -97,6 +97,18 @@ def test_line_scanner_only_reports_open_services():
     assert scanner._result_value("Nmap done: 1 IP address") is None
 
 
+def test_nuclei_command_uses_bounded_fast_defaults():
+    from egyxos.integrations.nuclei import NucleiScanner
+
+    context = ScanContext("example.com", authorized=True, threads=20, timeout=120)
+    command = NucleiScanner().command(context)
+    assert command[0:4] == ["nuclei", "-u", "example.com", "-silent"]
+    assert command[command.index("-c") + 1] == "20"
+    assert command[command.index("-bs") + 1] == "20"
+    assert command[command.index("-timeout") + 1] == "10"
+    assert command[command.index("-retries") + 1] == "0"
+
+
 def test_cli_help_and_tools(capsys):
     assert main(["tools", "--json"]) == 0
     output = capsys.readouterr().out
