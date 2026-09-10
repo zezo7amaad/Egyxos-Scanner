@@ -118,6 +118,15 @@ def test_nuclei_command_uses_bounded_fast_defaults():
     assert command[command.index("-retries") + 1] == "0"
 
 
+def test_arjun_uses_url_and_hides_diagnostic_stream():
+    from egyxos.integrations.arjun import ArjunScanner
+
+    context = ScanContext("example.com", authorized=True)
+    scanner = ArjunScanner()
+    assert scanner.command(context)[2] == "https://example.com"
+    assert scanner.suppress_raw_output is True
+
+
 def test_cli_help_and_tools(capsys):
     assert main(["tools", "--json"]) == 0
     output = capsys.readouterr().out

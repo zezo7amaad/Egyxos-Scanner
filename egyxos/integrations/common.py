@@ -10,6 +10,7 @@ class LineScanner(BaseScanner):
     """Common adapter for tools that emit one useful item per line."""
 
     kind = "url"
+    suppress_raw_output = False
 
     def command(self, context: ScanContext) -> List[str]:
         raise NotImplementedError
@@ -19,7 +20,8 @@ class LineScanner(BaseScanner):
         result = ScanResult(self.name, context.target)
         command = self.command(context)
         output = ExternalTool(self.tool).run(command, context)
-        result.raw_output = output.stdout
+        if not self.suppress_raw_output:
+            result.raw_output = output.stdout
         seen = set()
         for line in output.stdout.splitlines():
             value = self._result_value(line)
