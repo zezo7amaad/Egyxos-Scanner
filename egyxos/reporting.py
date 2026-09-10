@@ -4,10 +4,41 @@ import csv
 import html
 import io
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any, Dict
 
 from .models import ScanResult
+
+
+RESET = "\033[0m"
+COLORS = {
+    "cyan": "\033[36m",
+    "green": "\033[32m",
+    "yellow": "\033[33m",
+    "red": "\033[31m",
+    "magenta": "\033[35m",
+    "dim": "\033[2m",
+    "bold": "\033[1m",
+}
+SEVERITY_COLORS = {
+    "critical": "red",
+    "high": "red",
+    "medium": "yellow",
+    "low": "cyan",
+    "info": "dim",
+}
+
+
+def _color(text: str, name: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    return f"{COLORS[name]}{text}{RESET}"
+
+
+def _terminal_colors_enabled() -> bool:
+    return bool(sys.stdout.isatty() and os.environ.get("NO_COLOR") is None)
 
 
 def as_payload(result: ScanResult) -> Dict[str, Any]:
@@ -64,25 +95,82 @@ def render_sarif(result: ScanResult) -> str:
     return json.dumps(payload, indent=2)
 
 
-def render_terminal(result: ScanResult) -> str:
+def render_terminal(result: ScanResult, *, color: bool = None) -> str:
+    if color is None:
+        color = _terminal_colors_enabled()
+    title = "EGYXOS-SCANNER"
+    width = 42
+    border = "═" * width
     lines = [
-        f"Egyxos | {result.scanner}",
+        _color(f"╔{border}╗", "cyan", color),
+        _color(f"║{title.center(width)}║", "bold", color),
+        _color(f"╚{border}╝", "cyan", color),
+        "",
         f"Target: {result.target}",
-        f"Assets: {len(result.assets)} | Findings: {len(result.findings)}",
+        "Mode:   authorized assessment",
+        "",
+        _color("[✓] Scope validation", "green", color),
     ]
-    if result.raw_output.strip():
-        lines.extend(["", "Tool output", "-----------", result.raw_output.rstrip()])
+    counts = {}
+    for asset in result.assets:
+        counts[asset.kind] = counts.get(asset.kind, 0) + 1
+    labels = (
+        ("host", "Subdomains"),
+        ("url", "URLs"),
+        ("parameter", "Parameters"),
+        ("service", "Services"),
+    )
+    for kind, label in labels:
+        if kind in counts:
+            lines.append(f"[✓] {label:<16} {counts[kind]}")
+    finding_marker = "[!]" if result.findings else "[✓]"
+    lines.append(f"{_color(finding_marker, 'yellow' if result.findings else 'green', color)} "
+                 f"{'Findings':<16} {len(result.findings)}")
     if result.findings:
-        lines.extend(["", "Findings", "--------"])
-        lines.extend(f"[{finding.severity}] {finding.title}" for finding in result.findings)
-    if result.assets and not result.raw_output.strip():
-        lines.extend(["", "Assets", "------"])
-        lines.extend(f"{asset.kind}: {asset.value}" for asset in result.assets)
-    lines.extend(f"  error: {error.get('message', error)}" for error in result.errors)
+        severity_counts = {}
+        for finding in result.findings:
+            severity = finding.severity.lower()
+            severity_counts[severity] = severity_counts.get(severity, 0) + 1
+        lines.extend(["", _color("Findings", "bold", color), _color("─" * width, "dim", color)])
+        for severity in ("critical", "high", "medium", "low", "info"):
+            if severity in severity_counts:
+                label = severity.upper().ljust(10)
+                lines.append(_color(f"{label} {severity_counts[severity]}",
+                                    SEVERITY_COLORS[severity], color))
+    if result.assets:
+        grouped_assets = {}
+        for asset in result.assets:
+            grouped_assets.setdefault(asset.kind, []).append(asset.value)
+        asset_labels = {
+            "host": "Subdomains",
+            "url": "URLs",
+            "parameter": "Parameters",
+            "service": "Services",
+        }
+        lines.extend(["", _color("Discovered assets", "bold", color),
+                      _color("─" * width, "dim", color)])
+        for kind, values in grouped_assets.items():
+            label = asset_labels.get(kind, kind.title())
+            lines.append(_color(f"{label} ({len(values)})", "cyan", color))
+            lines.extend(f"  {value}" for value in dict.fromkeys(values))
+    if result.errors:
+        lines.extend(["", _color("Errors", "bold", color)])
+        for error in result.errors:
+            details = error.get("details", {}) if isinstance(error, dict) else {}
+            tool = details.get("tool")
+            suffix = f" ({tool})" if tool else ""
+            lines.append(f"{_color('[!]', 'red', color)} "
+                         f"{error.get('message', error)}{suffix}")
+            stderr = details.get("stderr")
+            if stderr:
+                lines.append(f"    {stderr.strip().splitlines()[-1]}")
+    if result.raw_output.strip() and result.scanner != "pipeline":
+        lines.extend(["", _color("Tool output", "bold", color),
+                      _color("─" * width, "dim", color), result.raw_output.rstrip()])
     return "\n".join(lines)
 
 
-def render(result: ScanResult, fmt: str) -> str:
+def render(result: ScanResult, fmt: str, *, color: bool = None) -> str:
     if fmt == "json":
         return render_json(result)
     if fmt == "csv":
@@ -91,7 +179,7 @@ def render(result: ScanResult, fmt: str) -> str:
         return render_html(result)
     if fmt == "sarif":
         return render_sarif(result)
-    return render_terminal(result)
+    return render_terminal(result, color=color)
 
 
 def write_report(result: ScanResult, path: Path, fmt: str = None) -> Path:

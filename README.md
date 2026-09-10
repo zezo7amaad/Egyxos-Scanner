@@ -139,9 +139,10 @@ egyxos sqli "https://authorized.example/item?id=1" \
 
 ### Reports and output
 
-With the default terminal format, scans print the external tool output in a
-clean, labeled presentation. Reports are only written when `--output` is
-supplied:
+With the default terminal format, scans print a clean, colored summary with
+progress indicators, aligned counts, and severity totals. Use `--no-color`
+for plain terminals or log capture. Reports are only written when `--output`
+is supplied:
 
 Supported formats are `terminal`, `json`, `csv`, `html`, and `sarif`:
 
@@ -192,8 +193,8 @@ egyxos version             Show the installed version
 ```
 
 Use `egyxos <command> --help` for command-specific options such as
-`--threads`, `--timeout`, `--rate-limit`, `--scope-file`, `--quiet`, and
-`--verbose`.
+`--threads`, `--timeout`, `--rate-limit`, `--scope-file`, `--quiet`,
+`--verbose`, and `--no-color`.
 
 ## Run online with GitHub Actions
 

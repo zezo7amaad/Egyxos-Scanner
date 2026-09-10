@@ -47,6 +47,7 @@ def _common(parser):
     parser.add_argument("--scope-file", type=Path, help="File containing additional authorized hosts")
     parser.add_argument("--quiet", action="store_true", help="Suppress non-result output")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose progress output")
+    parser.add_argument("--no-color", action="store_true", help="Disable colored terminal output")
     parser.add_argument("--debug", action="store_true", help="Enable debug diagnostics")
     parser.add_argument("--output", "-o", type=Path, help="Write a report to this file")
     parser.add_argument("--format", choices=("terminal", "json", "csv", "html", "sarif"),
@@ -125,17 +126,18 @@ def _context(args):
         allow_private=bool(args.allow_private or values.get("allow_private", False)),
         timeout=float(values.get("timeout", 120)),
         output_dir=values.get("output_dir", "egyxos-results"),
-        config=values,
         scope_file=getattr(args, "scope_file", None),
         profile=getattr(args, "profile", "standard"),
         severity=getattr(args, "severity", values.get("severity", "info")),
         threads=max(1, getattr(args, "threads", 10)),
         rate_limit=getattr(args, "rate_limit", None),
+        config={**values, "progress": not args.quiet and args.format == "terminal",
+                "verbose": args.verbose, "no_color": args.no_color},
     )
 
 
 def _emit(result, args):
-    text = render(result, args.format)
+    text = render(result, args.format, color=not getattr(args, "no_color", False))
     if args.output:
         write_report(result, args.output, args.format)
         if args.format == "terminal":
