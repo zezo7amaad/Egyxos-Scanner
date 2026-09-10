@@ -199,7 +199,8 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
             argv = details.get("argv")
             if argv and details.get("tool") == "httpx" and stderr and "no such option" in stderr.lower():
                 lines.append("    Expected ProjectDiscovery httpx; run: egyxos tools versions")
-    if result.raw_output.strip() and result.scanner != "pipeline":
+    if (result.raw_output.strip() and result.scanner != "pipeline"
+            and not result.assets and not result.findings):
         lines.extend(["", _color("Tool output", "bold", color),
                       _color("─" * width, "dim", color), result.raw_output.rstrip()])
     return "\n".join(lines)

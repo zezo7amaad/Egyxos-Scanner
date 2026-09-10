@@ -63,6 +63,15 @@ def test_pipeline_terminal_report_hides_raw_tool_stream():
     assert "configuration error" in output
 
 
+def test_terminal_report_does_not_duplicate_parsed_output():
+    result = ScanResult("subfinder", "example.com",
+                        assets=[Asset("a.example.com", kind="host")],
+                        raw_output="a.example.com")
+    output = render_terminal(result, color=False)
+    assert output.count("a.example.com") == 1
+    assert "Tool output" not in output
+
+
 def test_line_scanner_filters_tool_banners():
     from egyxos.integrations.common import LineScanner
 
