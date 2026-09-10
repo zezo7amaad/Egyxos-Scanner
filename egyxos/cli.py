@@ -35,6 +35,31 @@ TOOLS = {
     "sqlmap": "SQL injection testing (explicit opt-in only)",
 }
 
+SHORT_COMMANDS = {
+    "-d": "subdomains",
+    "-s": "subdomains",
+    "-h": "http",
+    "-c": "crawl",
+    "-u": "urls",
+    "-p": "params",
+    "-f": "fuzz",
+    "-n": "ports",
+    "-v": "vuln",
+    "-r": "report",
+    "-t": "tools",
+    "-g": "config",
+    "-V": "version",
+    "-m": "methodology",
+}
+
+
+class ShortCommandParser(argparse.ArgumentParser):
+    def parse_args(self, args=None, namespace=None):
+        values = list(sys.argv[1:] if args is None else args)
+        if values and values[0] in SHORT_COMMANDS:
+            values[0] = SHORT_COMMANDS[values[0]]
+        return super().parse_args(values, namespace)
+
 
 def _common(parser):
     parser.add_argument("target", help="Authorized hostname, IP, CIDR, or http(s) URL")
@@ -60,7 +85,7 @@ def _common(parser):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="egyxos", description="Safe modular security reconnaissance CLI")
+    parser = ShortCommandParser(prog="egyxos", description="Safe modular security reconnaissance CLI")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     for name, description in (
@@ -89,24 +114,24 @@ def build_parser():
         ("ports", ("-n",), "Scan services with nmap"),
         ("vuln", ("-v",), "Run nuclei vulnerability templates"),
     ):
-        command = sub.add_parser(name, aliases=list(aliases), help=description)
+        command = sub.add_parser(name, help=description)
         _common(command)
     sqli = sub.add_parser("sqli", help="Run sqlmap; explicit opt-in is mandatory")
     _common(sqli)
     sqli.add_argument("--i-understand-sqlmap", action="store_true",
                       help="Explicitly opt into sqlmap testing")
-    report = sub.add_parser("report", aliases=["-r"], help="Convert a JSON result to a report format")
+    report = sub.add_parser("report", help="Convert a JSON result to a report format")
     report.add_argument("input", type=Path)
     report.add_argument("--format", choices=("terminal", "json", "csv", "html", "sarif"), default="terminal")
     report.add_argument("--output", "-o", type=Path)
-    tools = sub.add_parser("tools", aliases=["-t"], help="Manage optional scanner dependencies")
+    tools = sub.add_parser("tools", help="Manage optional scanner dependencies")
     tools.add_argument("action", choices=("list", "check", "versions"), nargs="?", default="check")
     tools.add_argument("--json", action="store_true", help="Output machine-readable JSON")
-    config = sub.add_parser("config", aliases=["-g"], help="Show or initialize configuration")
+    config = sub.add_parser("config", help="Show or initialize configuration")
     config.add_argument("action", choices=("show", "init", "path"), nargs="?", default="show")
     config.add_argument("--path", type=Path)
-    sub.add_parser("version", aliases=["-V"], help="Print the Egyxos version")
-    methodology = sub.add_parser("methodology", aliases=["-m"], help="Show the modular reconnaissance methodology")
+    sub.add_parser("version", help="Print the Egyxos version")
+    methodology = sub.add_parser("methodology", help="Show the modular reconnaissance methodology")
     methodology.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     return parser
 
