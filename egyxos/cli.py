@@ -79,17 +79,17 @@ def build_parser():
         command.add_argument("--no-ports", action="store_true")
         command.add_argument("--no-vuln", action="store_true")
         command.add_argument("--severity", default="info", help="Minimum severity")
-    for name, description in (
-        ("subdomains", "Discover subdomains with subfinder"),
-        ("http", "Probe HTTP services with httpx"),
-        ("crawl", "Crawl a target with katana"),
-        ("urls", "Discover archived URLs with paramspider"),
-        ("params", "Discover hidden parameters with arjun"),
-        ("fuzz", "Fuzz a URL with ffuf (requires --wordlist)"),
-        ("ports", "Scan services with nmap"),
-        ("vuln", "Run nuclei vulnerability templates"),
+    for name, aliases, description in (
+        ("subdomains", ("-d", "-s"), "Discover subdomains with subfinder"),
+        ("http", (), "Probe HTTP services with httpx"),
+        ("crawl", (), "Crawl a target with katana"),
+        ("urls", (), "Discover archived URLs with paramspider"),
+        ("params", (), "Discover hidden parameters with arjun"),
+        ("fuzz", (), "Fuzz a URL with ffuf (requires --wordlist)"),
+        ("ports", (), "Scan services with nmap"),
+        ("vuln", ("-v",), "Run nuclei vulnerability templates"),
     ):
-        command = sub.add_parser(name, help=description)
+        command = sub.add_parser(name, aliases=list(aliases), help=description)
         _common(command)
     sqli = sub.add_parser("sqli", help="Run sqlmap; explicit opt-in is mandatory")
     _common(sqli)
@@ -232,7 +232,13 @@ def main(argv=None):
                                   no_subdomains=args.no_subdomains, no_ports=args.no_ports,
                                   no_vuln=args.no_vuln)
         else:
-            result = run_scanner({"subdomains": "subfinder"}.get(args.command, args.command), context)
+            scanner_name = {
+                "subdomains": "subfinder",
+                "-d": "subfinder",
+                "-s": "subfinder",
+                "-v": "vuln",
+            }.get(args.command, args.command)
+            result = run_scanner(scanner_name, context)
         return _emit(result, args)
     except (EgyxosError, OSError, ValueError, json.JSONDecodeError) as exc:
         error = exc.as_dict() if isinstance(exc, EgyxosError) else {

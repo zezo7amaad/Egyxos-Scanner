@@ -210,6 +210,9 @@ egyxos params <target>     Parameter discovery
 egyxos fuzz <url/FUZZ>     Controlled content discovery
 egyxos ports <target>      Service enumeration
 egyxos vuln <target>       Non-destructive vulnerability checks
+egyxos -d <target>         Short form for subdomain discovery
+egyxos -s <target>         Short form for subdomain discovery
+egyxos -v <target>         Short form for vulnerability checks
 egyxos sqli <url>          Explicit SQL injection testing
 egyxos report <directory>  Regenerate reports
 egyxos tools check         Check optional dependencies

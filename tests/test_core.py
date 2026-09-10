@@ -118,6 +118,15 @@ def test_cli_help_and_tools(capsys):
     assert raised.value.code == 0
 
 
+def test_short_scan_command_aliases():
+    from egyxos.cli import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args(["-d", "example.com", "--yes"]).command == "-d"
+    assert parser.parse_args(["-s", "example.com", "--yes"]).command == "-s"
+    assert parser.parse_args(["-v", "example.com", "--yes"]).command == "-v"
+
+
 def test_methodology_catalog_and_plan():
     catalog = stage_catalog()
     assert catalog[0]["key"] == "target"
