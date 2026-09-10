@@ -19,6 +19,7 @@ from .context import ScanContext
 from .errors import EgyxosError
 from .integrations import SCANNERS
 from .models import Asset, Finding, ScanResult
+from .methodology import stage_catalog
 from .pipeline import run_pipeline, run_scanner
 from .reporting import render, write_report
 
@@ -105,6 +106,8 @@ def build_parser():
     config.add_argument("action", choices=("show", "init", "path"), nargs="?", default="show")
     config.add_argument("--path", type=Path)
     sub.add_parser("version", help="Print the Egyxos version")
+    methodology = sub.add_parser("methodology", help="Show the modular reconnaissance methodology")
+    methodology.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     return parser
 
 
@@ -176,6 +179,15 @@ def main(argv=None):
     try:
         if args.command == "version":
             print(__version__)
+            return 0
+        if args.command == "methodology":
+            if args.json:
+                print(json.dumps(stage_catalog(), indent=2))
+            else:
+                for stage in stage_catalog():
+                    tools = ", ".join(stage["tools"]) or "built-in"
+                    suffix = f" [{stage['opt_in']}]" if stage["opt_in"] else ""
+                    print(f"{stage['name']:<28} {tools}{suffix}")
             return 0
         if args.command == "tools":
             available = {name: {"description": description, "available": bool(shutil.which(name))}

@@ -204,21 +204,10 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
 
 
 def _methodology_text(result: ScanResult) -> str:
-    stages = result.metadata.get("methodology", [])
-    labels = {
-        "subfinder": "subdomain discovery",
-        "http": "HTTP enrichment",
-        "crawl": "web crawling",
-        "urls": "URL discovery",
-        "params": "parameter discovery",
-        "ports": "service enumeration",
-        "fuzz": "content discovery",
-        "vuln": "vulnerability checks",
-        "sqli": "SQL injection checks",
-    }
+    stages = result.metadata.get("stages", [])
     if not stages:
         return "Authorized scanner result"
-    return " -> ".join(labels.get(stage, stage) for stage in stages)
+    return " -> ".join(stage["name"] for stage in stages)
 
 
 def render(result: ScanResult, fmt: str, *, color: bool = None) -> str:

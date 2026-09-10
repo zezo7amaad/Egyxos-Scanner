@@ -4,6 +4,7 @@ import sys
 
 from .errors import EgyxosError
 from .integrations import SCANNERS
+from .methodology import planned_stages
 from .models import ScanResult
 
 
@@ -40,9 +41,10 @@ def run_pipeline(context, *, include_vuln: bool = False, only=None, exclude=None
     if context.config.get("sqlmap_opt_in") and "sqli" not in names:
         names.append("sqli")
     combined.metadata["methodology"] = names[:]
-    combined.metadata["stages"] = [
-        "target", "scope_validation", *names, "finding_engine", "report"
-    ]
+    combined.metadata["stages"] = planned_stages(
+        context.profile, include_vuln=include_vuln and not no_vuln,
+        include_sqli=bool(context.config.get("sqlmap_opt_in")),
+    )
     for index, name in enumerate(names, 1):
         if context.config.get("progress"):
             print(f"\r[{index}/{len(names)}] {name:<12} running...", end="", file=sys.stderr, flush=True)

@@ -8,6 +8,7 @@ from egyxos.errors import AuthorizationError, ScopeError
 from egyxos.models import Asset, Finding, ScanResult
 from egyxos.reporting import render_csv, render_html, render_sarif, render_terminal
 from egyxos.scope import in_scope, normalize_target
+from egyxos.methodology import planned_stages, stage_catalog
 
 
 def test_scope_normalization_and_subdomain_matching():
@@ -86,3 +87,12 @@ def test_cli_help_and_tools(capsys):
     with pytest.raises(SystemExit) as raised:
         main(["--help"])
     assert raised.value.code == 0
+
+
+def test_methodology_catalog_and_plan():
+    catalog = stage_catalog()
+    assert catalog[0]["key"] == "target"
+    assert any(stage["name"] == "WAF detection" for stage in catalog)
+    plan = planned_stages("standard", include_vuln=True)
+    assert [stage["key"] for stage in plan][-2:] == ["finding_engine", "report"]
+    assert "vulnerability" in [stage["key"] for stage in plan]

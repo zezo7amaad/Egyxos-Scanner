@@ -164,6 +164,19 @@ service enumeration, vulnerability checks, the explicit SQLmap opt-in,
 finding normalization, and reporting. Missing optional tools are recorded as
 actionable errors without stopping the remaining stages.
 
+Inspect the full reNgine-inspired methodology and its tool alternatives:
+
+```bash
+egyxos methodology
+egyxos methodology --json
+```
+
+The catalog includes subdomains, HTTP enrichment, endpoint discovery,
+directory/file fuzzing, ports, screenshots, vulnerability checks (Nuclei,
+Dalfox, CRLFuzzer, and S3 checks), WHOIS, WAF detection, and explicit SQLmap
+opt-in. A catalog entry documents the planned stage; only integrations wired
+into the selected profile are executed.
+
 ### Configuration
 
 Create and inspect the default configuration:
