@@ -10,8 +10,8 @@ from .methodology import planned_stages
 PROGRESS_LABELS = {
     "subfinder": "subdomains",
     "http": "http",
-    "crawl": "endpoints",
-    "urls": "endpoints",
+    "crawl": "crawl",
+    "urls": "urls",
     "params": "parameters",
     "fuzz": "fuzzing",
     "ports": "ports",
