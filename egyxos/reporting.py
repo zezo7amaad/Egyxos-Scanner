@@ -124,9 +124,6 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
         "",
         _color("[✓] Scope validation", "green", color),
         "",
-        _color("Methodology", "bold", color),
-        _color(_methodology_text(result), "dim", color),
-        "",
         _color("Results", "bold", color),
     ]
     counts = {}
@@ -204,13 +201,6 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
         lines.extend(["", _color("Tool output", "bold", color),
                       _color("─" * width, "dim", color), result.raw_output.rstrip()])
     return "\n".join(lines)
-
-
-def _methodology_text(result: ScanResult) -> str:
-    stages = result.metadata.get("stages", [])
-    if not stages:
-        return "Authorized scanner result"
-    return " -> ".join(stage["name"] for stage in stages)
 
 
 def render(result: ScanResult, fmt: str, *, color: bool = None) -> str:
