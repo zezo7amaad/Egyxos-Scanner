@@ -1,4 +1,7 @@
+import re
+
 from .common import LineScanner
+from ..models import Asset
 
 
 class FfufScanner(LineScanner):
@@ -16,3 +19,22 @@ class FfufScanner(LineScanner):
             target = "https://" + target
         return [self.tool, "-u", target.rstrip("/") + "/FUZZ",
                 "-w", str(wordlist), "-noninteractive"]
+
+    def scan(self, context):
+        result = super().scan(context)
+        base = (context.requested_target or context.target).rstrip("/")
+        if not base.lower().startswith(("http://", "https://")):
+            base = "https://" + base
+        parsed = []
+        for line in result.raw_output.splitlines():
+            match = re.match(r"^\s*(/\S+?)(?:\s+\[Status:.*)?\s*$", line)
+            if match:
+                value = base + "/" + match.group(1).lstrip("/")
+                if value not in parsed:
+                    parsed.append(value)
+        if parsed:
+            result.assets = [
+                Asset(value=value, kind=self.kind, source=self.name)
+                for value in parsed
+            ]
+        return result

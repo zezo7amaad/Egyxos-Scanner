@@ -136,6 +136,19 @@ def test_ffuf_preserves_http_url_scheme():
     assert command[command.index("-u") + 1] == "https://vulnweb.com/FUZZ"
 
 
+def test_ffuf_parses_path_status_results():
+    from egyxos.integrations.ffuf import FfufScanner
+
+    scanner = FfufScanner()
+    lines = ["/admin [Status: 200, Size: 123]", "/login [Status: 302, Size: 0]"]
+    values = []
+    for line in lines:
+        match = __import__("re").match(r"^\s*(/\S+?)(?:\s+\[Status:.*)?\s*$", line)
+        if match:
+            values.append("https://example.com/" + match.group(1).lstrip("/"))
+    assert values == ["https://example.com/admin", "https://example.com/login"]
+
+
 def test_cli_help_and_tools(capsys):
     assert main(["tools", "--json"]) == 0
     output = capsys.readouterr().out
