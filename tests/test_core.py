@@ -60,6 +60,23 @@ def test_pipeline_terminal_report_hides_raw_tool_stream():
     assert "configuration error" in output
 
 
+def test_line_scanner_filters_tool_banners():
+    from egyxos.integrations.common import LineScanner
+
+    class UrlScanner(LineScanner):
+        name = "test"
+        tool = "test"
+
+        def command(self, context):
+            return ["test"]
+
+    scanner = UrlScanner()
+    scanner.kind = "url"
+    assert scanner._result_value("https://example.com/path") == "https://example.com/path"
+    assert scanner._result_value("with <3 by @tool") is None
+    assert scanner._result_value("  ___ tool banner ___") is None
+
+
 def test_cli_help_and_tools(capsys):
     assert main(["tools", "--json"]) == 0
     output = capsys.readouterr().out

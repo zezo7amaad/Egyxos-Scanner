@@ -39,6 +39,7 @@ def run_pipeline(context, *, include_vuln: bool = False, only=None, exclude=None
         names = [name for name in names if name not in skipped]
     if context.config.get("sqlmap_opt_in") and "sqli" not in names:
         names.append("sqli")
+    combined.metadata["methodology"] = names[:]
     for index, name in enumerate(names, 1):
         if context.config.get("progress"):
             print(f"\r[{index}/{len(names)}] {name:<12} running...", end="", file=sys.stderr, flush=True)

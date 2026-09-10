@@ -79,7 +79,8 @@ class ExternalTool:
                 stdout, stderr = process.communicate()
                 raise ToolExecutionError(
                     "External tool timed out.",
-                    details={"tool": self.executable, "timeout": limit, "stderr": stderr[-1000:]},
+                    details={"tool": self.executable, "argv": argv, "timeout": limit,
+                             "stderr": stderr[-1000:]},
                 )
             time.sleep(0.05)
         stdout, stderr = process.communicate()
@@ -87,6 +88,7 @@ class ExternalTool:
         if process.returncode != 0:
             raise ToolExecutionError(
                 "External tool returned a non-zero exit code.",
-                details={"tool": self.executable, "returncode": process.returncode, "stderr": stderr[-2000:]},
+                details={"tool": self.executable, "argv": argv,
+                         "returncode": process.returncode, "stderr": stderr[-2000:]},
             )
         return result

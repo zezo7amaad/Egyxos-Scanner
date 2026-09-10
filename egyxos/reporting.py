@@ -110,6 +110,11 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
         "Mode:   authorized assessment",
         "",
         _color("[✓] Scope validation", "green", color),
+        "",
+        _color("Methodology", "bold", color),
+        _color(_methodology_text(result), "dim", color),
+        "",
+        _color("Results", "bold", color),
     ]
     counts = {}
     for asset in result.assets:
@@ -164,10 +169,31 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
             stderr = details.get("stderr")
             if stderr:
                 lines.append(f"    {stderr.strip().splitlines()[-1]}")
+            argv = details.get("argv")
+            if argv and details.get("tool") == "httpx" and stderr and "no such option" in stderr.lower():
+                lines.append("    Expected ProjectDiscovery httpx; run: egyxos tools versions")
     if result.raw_output.strip() and result.scanner != "pipeline":
         lines.extend(["", _color("Tool output", "bold", color),
                       _color("─" * width, "dim", color), result.raw_output.rstrip()])
     return "\n".join(lines)
+
+
+def _methodology_text(result: ScanResult) -> str:
+    stages = result.metadata.get("methodology", [])
+    labels = {
+        "subfinder": "subdomain discovery",
+        "http": "HTTP enrichment",
+        "crawl": "web crawling",
+        "urls": "URL discovery",
+        "params": "parameter discovery",
+        "ports": "service enumeration",
+        "fuzz": "content discovery",
+        "vuln": "vulnerability checks",
+        "sqli": "SQL injection checks",
+    }
+    if not stages:
+        return "Authorized scanner result"
+    return " -> ".join(labels.get(stage, stage) for stage in stages)
 
 
 def render(result: ScanResult, fmt: str, *, color: bool = None) -> str:
