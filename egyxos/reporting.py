@@ -194,6 +194,8 @@ def render_terminal(result: ScanResult, *, color: bool = None) -> str:
             stderr = details.get("stderr")
             if stderr:
                 lines.append(f"    {stderr.strip().splitlines()[-1]}")
+            if details.get("timeout") is not None:
+                lines.append(f"    Timeout: {details['timeout']} seconds; use --timeout to increase it.")
             argv = details.get("argv")
             if argv and details.get("tool") == "httpx" and stderr and "no such option" in stderr.lower():
                 lines.append("    Expected ProjectDiscovery httpx; run: egyxos tools versions")

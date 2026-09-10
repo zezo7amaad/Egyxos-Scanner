@@ -33,6 +33,10 @@ class LineScanner(BaseScanner):
         value = line.strip()
         if not value or value.startswith("#") or self._looks_like_banner(value):
             return None
+        if self.kind == "service":
+            if " open " not in f" {value.lower()} " or "/tcp" not in value.lower():
+                return None
+            return value
         if self.kind == "url" and not value.lower().startswith(("http://", "https://")):
             return None
         if self.kind == "host" and not re.match(

@@ -80,6 +80,23 @@ def test_line_scanner_filters_tool_banners():
     assert scanner._result_value("  ___ tool banner ___") is None
 
 
+def test_line_scanner_only_reports_open_services():
+    from egyxos.integrations.common import LineScanner
+
+    class ServiceScanner(LineScanner):
+        name = "test"
+        tool = "test"
+        kind = "service"
+
+        def command(self, context):
+            return ["test"]
+
+    scanner = ServiceScanner()
+    assert scanner._result_value("443/tcp open https https") == "443/tcp open https https"
+    assert scanner._result_value("1000 filtered tcp ports") is None
+    assert scanner._result_value("Nmap done: 1 IP address") is None
+
+
 def test_cli_help_and_tools(capsys):
     assert main(["tools", "--json"]) == 0
     output = capsys.readouterr().out
