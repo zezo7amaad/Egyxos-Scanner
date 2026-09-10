@@ -89,6 +89,12 @@ egyxos scan example.com \
   --output-dir results
 ```
 
+The same scan using short aliases:
+
+```bash
+egyxos scan example.com -y -M passive -F html -O results
+```
+
 The equivalent explicit authorization flag is:
 
 ```bash
@@ -121,6 +127,18 @@ egyxos ports example.com --yes
 egyxos vuln example.com --yes
 ```
 
+Short module commands:
+
+```bash
+egyxos -d example.com -y       # subdomains
+egyxos -h example.com -y       # HTTP probing
+egyxos -c example.com -y       # crawling
+egyxos -u example.com -y       # URL discovery
+egyxos -p example.com -y       # parameter discovery
+egyxos -n example.com -y       # port scanning
+egyxos -v example.com -y       # vulnerability scanning
+```
+
 Controlled content discovery requires an explicit URL and wordlist:
 
 ```bash
@@ -139,9 +157,10 @@ egyxos sqli "https://authorized.example/item?id=1" \
 
 ### Reports and output
 
-With the default terminal format, scans print the external tool output in a
-clean, labeled presentation. Reports are only written when `--output` is
-supplied:
+With the default terminal format, scans print a clean, colored summary with
+progress indicators, aligned counts, and severity totals. Use `--no-color`
+for plain terminals or log capture. Reports are only written when `--output`
+is supplied:
 
 Supported formats are `terminal`, `json`, `csv`, `html`, and `sarif`:
 
@@ -150,6 +169,31 @@ egyxos scan example.com --yes --format json --output result.json
 egyxos report result.json --format html --output report.html
 egyxos report result.json --format sarif --output report.sarif
 ```
+
+Finding exports use a stable schema:
+
+```text
+target, parameter, injection_type, evidence, confidence, severity, remediation
+```
+
+The pipeline runs modular stages in order: scope validation, subdomain
+discovery, HTTP enrichment, crawling, parameter discovery, content discovery,
+service enumeration, vulnerability checks, the explicit SQLmap opt-in,
+finding normalization, and reporting. Missing optional tools are recorded as
+actionable errors without stopping the remaining stages.
+
+Inspect the full reNgine-inspired methodology and its tool alternatives:
+
+```bash
+egyxos methodology
+egyxos methodology --json
+```
+
+The catalog includes subdomains, HTTP enrichment, endpoint discovery,
+directory/file fuzzing, ports, screenshots, vulnerability checks (Nuclei,
+Dalfox, CRLFuzzer, and S3 checks), WHOIS, WAF detection, and explicit SQLmap
+opt-in. A catalog entry documents the planned stage; only integrations wired
+into the selected profile are executed.
 
 ### Configuration
 
@@ -184,6 +228,20 @@ egyxos params <target>     Parameter discovery
 egyxos fuzz <url/FUZZ>     Controlled content discovery
 egyxos ports <target>      Service enumeration
 egyxos vuln <target>       Non-destructive vulnerability checks
+egyxos -d <target>         Short form for subdomain discovery
+egyxos -s <target>         Short form for subdomain discovery
+egyxos -h <target>         Short form for HTTP probing
+egyxos -c <target>         Short form for crawling
+egyxos -u <target>         Short form for URL discovery
+egyxos -p <target>         Short form for parameter discovery
+egyxos -f <url/FUZZ>       Short form for fuzzing
+egyxos -n <target>         Short form for port scanning
+egyxos -v <target>         Short form for vulnerability checks
+egyxos -t check            Short form for tool checks
+egyxos -r <file>           Short form for report conversion
+egyxos -g show             Short form for configuration
+egyxos -m                  Short form for methodology
+egyxos -V                  Short form for version
 egyxos sqli <url>          Explicit SQL injection testing
 egyxos report <directory>  Regenerate reports
 egyxos tools check         Check optional dependencies
@@ -192,8 +250,18 @@ egyxos version             Show the installed version
 ```
 
 Use `egyxos <command> --help` for command-specific options such as
-`--threads`, `--timeout`, `--rate-limit`, `--scope-file`, `--quiet`, and
-`--verbose`.
+`--threads`, `--timeout`, `--rate-limit`, `--scope-file`, `--quiet`,
+`--verbose`, `--no-color`, `--format`, `--output`, `--wordlist`, `--profile`,
+and `--severity`.
+
+Short option aliases are also available:
+
+```text
+-y authorization   -P allow private   -x timeout       -T threads
+-R rate limit      -S scope file      -q quiet         -V verbose
+-C no color        -D debug           -F format        -O output dir
+-w wordlist        -M profile         -L severity
+```
 
 ## Run online with GitHub Actions
 

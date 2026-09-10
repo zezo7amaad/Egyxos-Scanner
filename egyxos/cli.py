@@ -19,6 +19,7 @@ from .context import ScanContext
 from .errors import EgyxosError
 from .integrations import SCANNERS
 from .models import Asset, Finding, ScanResult
+from .methodology import stage_catalog
 from .pipeline import run_pipeline, run_scanner
 from .reporting import render, write_report
 
@@ -37,24 +38,25 @@ TOOLS = {
 
 def _common(parser):
     parser.add_argument("target", help="Authorized hostname, IP, CIDR, or http(s) URL")
-    parser.add_argument("--yes-i-am-authorized", "--yes", action="store_true",
+    parser.add_argument("--yes-i-am-authorized", "--yes", "-y", action="store_true",
                         help="Confirm you own or are explicitly authorized to test the target")
-    parser.add_argument("--allow-private", action="store_true",
+    parser.add_argument("--allow-private", "-P", action="store_true",
                         help="Allow private/loopback targets (still requires authorization)")
-    parser.add_argument("--timeout", type=float, default=None, help="Per-tool timeout in seconds")
-    parser.add_argument("--threads", type=int, default=10, help="Concurrent workers (default: 10)")
-    parser.add_argument("--rate-limit", type=float, default=None, help="Requests per second")
-    parser.add_argument("--scope-file", type=Path, help="File containing additional authorized hosts")
-    parser.add_argument("--quiet", action="store_true", help="Suppress non-result output")
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose progress output")
-    parser.add_argument("--debug", action="store_true", help="Enable debug diagnostics")
+    parser.add_argument("--timeout", "-x", type=float, default=None, help="Per-tool timeout in seconds")
+    parser.add_argument("--threads", "-T", type=int, default=10, help="Concurrent workers (default: 10)")
+    parser.add_argument("--rate-limit", "-R", type=float, default=None, help="Requests per second")
+    parser.add_argument("--scope-file", "-S", type=Path, help="File containing additional authorized hosts")
+    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress non-result output")
+    parser.add_argument("--verbose", "-V", action="store_true", help="Enable verbose progress output")
+    parser.add_argument("--no-color", "-C", action="store_true", help="Disable colored terminal output")
+    parser.add_argument("--debug", "-D", action="store_true", help="Enable debug diagnostics")
     parser.add_argument("--output", "-o", type=Path, help="Write a report to this file")
-    parser.add_argument("--format", choices=("terminal", "json", "csv", "html", "sarif"),
+    parser.add_argument("--format", "-F", choices=("terminal", "json", "csv", "html", "sarif"),
                         default="terminal", help="Report format (default: terminal)")
     parser.add_argument("--json", action="store_const", const="json", dest="format",
                         help="Shorthand for --format json")
-    parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument("--wordlist", type=Path, help="Wordlist for fuzz")
+    parser.add_argument("--output-dir", "-O", type=Path, default=None)
+    parser.add_argument("--wordlist", "-w", type=Path, help="Wordlist for fuzz")
 
 
 def build_parser():
@@ -67,8 +69,8 @@ def build_parser():
     ):
         command = sub.add_parser(name, help=description)
         _common(command)
-        command.add_argument("--include-vuln", action="store_true", help="Include nuclei checks")
-        command.add_argument("--profile", choices=("passive", "standard", "deep", "active"),
+        command.add_argument("--include-vuln", "-v", action="store_true", help="Include nuclei checks")
+        command.add_argument("--profile", "-M", choices=("passive", "standard", "deep", "active"),
                              default="standard")
         command.add_argument("--only", help="Comma-separated scanner names to run")
         command.add_argument("--exclude", help="Comma-separated scanner names to skip")
@@ -76,34 +78,36 @@ def build_parser():
         command.add_argument("--no-subdomains", action="store_true")
         command.add_argument("--no-ports", action="store_true")
         command.add_argument("--no-vuln", action="store_true")
-        command.add_argument("--severity", default="info", help="Minimum severity")
-    for name, description in (
-        ("subdomains", "Discover subdomains with subfinder"),
-        ("http", "Probe HTTP services with httpx"),
-        ("crawl", "Crawl a target with katana"),
-        ("urls", "Discover archived URLs with paramspider"),
-        ("params", "Discover hidden parameters with arjun"),
-        ("fuzz", "Fuzz a URL with ffuf (requires --wordlist)"),
-        ("ports", "Scan services with nmap"),
-        ("vuln", "Run nuclei vulnerability templates"),
+        command.add_argument("--severity", "-L", default="info", help="Minimum severity")
+    for name, aliases, description in (
+        ("subdomains", ("-d", "-s"), "Discover subdomains with subfinder"),
+        ("http", ("-h",), "Probe HTTP services with httpx"),
+        ("crawl", ("-c",), "Crawl a target with katana"),
+        ("urls", ("-u",), "Discover archived URLs with paramspider"),
+        ("params", ("-p",), "Discover hidden parameters with arjun"),
+        ("fuzz", ("-f",), "Fuzz a URL with ffuf (requires --wordlist)"),
+        ("ports", ("-n",), "Scan services with nmap"),
+        ("vuln", ("-v",), "Run nuclei vulnerability templates"),
     ):
-        command = sub.add_parser(name, help=description)
+        command = sub.add_parser(name, aliases=list(aliases), help=description)
         _common(command)
     sqli = sub.add_parser("sqli", help="Run sqlmap; explicit opt-in is mandatory")
     _common(sqli)
     sqli.add_argument("--i-understand-sqlmap", action="store_true",
                       help="Explicitly opt into sqlmap testing")
-    report = sub.add_parser("report", help="Convert a JSON result to a report format")
+    report = sub.add_parser("report", aliases=["-r"], help="Convert a JSON result to a report format")
     report.add_argument("input", type=Path)
     report.add_argument("--format", choices=("terminal", "json", "csv", "html", "sarif"), default="terminal")
     report.add_argument("--output", "-o", type=Path)
-    tools = sub.add_parser("tools", help="Manage optional scanner dependencies")
+    tools = sub.add_parser("tools", aliases=["-t"], help="Manage optional scanner dependencies")
     tools.add_argument("action", choices=("list", "check", "versions"), nargs="?", default="check")
     tools.add_argument("--json", action="store_true", help="Output machine-readable JSON")
-    config = sub.add_parser("config", help="Show or initialize configuration")
+    config = sub.add_parser("config", aliases=["-g"], help="Show or initialize configuration")
     config.add_argument("action", choices=("show", "init", "path"), nargs="?", default="show")
     config.add_argument("--path", type=Path)
-    sub.add_parser("version", help="Print the Egyxos version")
+    sub.add_parser("version", aliases=["-V"], help="Print the Egyxos version")
+    methodology = sub.add_parser("methodology", aliases=["-m"], help="Show the modular reconnaissance methodology")
+    methodology.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     return parser
 
 
@@ -125,17 +129,18 @@ def _context(args):
         allow_private=bool(args.allow_private or values.get("allow_private", False)),
         timeout=float(values.get("timeout", 120)),
         output_dir=values.get("output_dir", "egyxos-results"),
-        config=values,
         scope_file=getattr(args, "scope_file", None),
         profile=getattr(args, "profile", "standard"),
         severity=getattr(args, "severity", values.get("severity", "info")),
         threads=max(1, getattr(args, "threads", 10)),
         rate_limit=getattr(args, "rate_limit", None),
+        config={**values, "progress": not args.quiet and args.format == "terminal",
+                "verbose": args.verbose, "no_color": args.no_color},
     )
 
 
 def _emit(result, args):
-    text = render(result, args.format)
+    text = render(result, args.format, color=not getattr(args, "no_color", False))
     if args.output:
         write_report(result, args.output, args.format)
         if args.format == "terminal":
@@ -171,9 +176,24 @@ def _report(args):
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    args.command = {
+        "-d": "subdomains", "-s": "subdomains", "-h": "http",
+        "-c": "crawl", "-u": "urls", "-p": "params", "-f": "fuzz",
+        "-n": "ports", "-v": "vuln", "-r": "report", "-t": "tools",
+        "-g": "config", "-V": "version", "-m": "methodology",
+    }.get(args.command, args.command)
     try:
         if args.command == "version":
             print(__version__)
+            return 0
+        if args.command == "methodology":
+            if args.json:
+                print(json.dumps(stage_catalog(), indent=2))
+            else:
+                for stage in stage_catalog():
+                    tools = ", ".join(stage["tools"]) or "built-in"
+                    suffix = f" [{stage['opt_in']}]" if stage["opt_in"] else ""
+                    print(f"{stage['name']:<28} {tools}{suffix}")
             return 0
         if args.command == "tools":
             available = {name: {"description": description, "available": bool(shutil.which(name))}
@@ -218,7 +238,8 @@ def main(argv=None):
                                   no_subdomains=args.no_subdomains, no_ports=args.no_ports,
                                   no_vuln=args.no_vuln)
         else:
-            result = run_scanner({"subdomains": "subfinder"}.get(args.command, args.command), context)
+            scanner_name = {"subdomains": "subfinder"}.get(args.command, args.command)
+            result = run_scanner(scanner_name, context)
         return _emit(result, args)
     except (EgyxosError, OSError, ValueError, json.JSONDecodeError) as exc:
         error = exc.as_dict() if isinstance(exc, EgyxosError) else {
