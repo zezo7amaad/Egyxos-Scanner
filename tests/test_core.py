@@ -127,6 +127,15 @@ def test_arjun_uses_url_and_hides_diagnostic_stream():
     assert scanner.suppress_raw_output is True
 
 
+def test_ffuf_preserves_http_url_scheme():
+    from egyxos.integrations.ffuf import FfufScanner
+
+    context = ScanContext("vulnweb.com", requested_target="https://vulnweb.com/",
+                          authorized=True, config={"wordlist": "/tmp/words.txt"})
+    command = FfufScanner().command(context)
+    assert command[command.index("-u") + 1] == "https://vulnweb.com/FUZZ"
+
+
 def test_cli_help_and_tools(capsys):
     assert main(["tools", "--json"]) == 0
     output = capsys.readouterr().out

@@ -11,4 +11,8 @@ class FfufScanner(LineScanner):
         wordlist = context.config.get("wordlist")
         if not wordlist:
             raise ValueError("fuzz requires a configured wordlist (--wordlist or config.wordlist).")
-        return [self.tool, "-u", context.target.rstrip("/") + "/FUZZ", "-w", str(wordlist), "-noninteractive"]
+        target = context.requested_target or context.target
+        if not target.lower().startswith(("http://", "https://")):
+            target = "https://" + target
+        return [self.tool, "-u", target.rstrip("/") + "/FUZZ",
+                "-w", str(wordlist), "-noninteractive"]
