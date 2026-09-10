@@ -5,6 +5,19 @@ import sys
 from .errors import EgyxosError
 from .integrations import SCANNERS
 from .methodology import planned_stages
+
+
+PROGRESS_LABELS = {
+    "subfinder": "subdomains",
+    "http": "http",
+    "crawl": "endpoints",
+    "urls": "endpoints",
+    "params": "parameters",
+    "fuzz": "fuzzing",
+    "ports": "ports",
+    "vuln": "vulnerability",
+    "sqli": "sql injection",
+}
 from .models import ScanResult
 
 
@@ -46,12 +59,15 @@ def run_pipeline(context, *, include_vuln: bool = False, only=None, exclude=None
         include_sqli=bool(context.config.get("sqlmap_opt_in")),
     )
     for index, name in enumerate(names, 1):
+        progress_name = PROGRESS_LABELS.get(name, name)
         if context.config.get("progress"):
-            print(f"\r[{index}/{len(names)}] {name:<12} running...", end="", file=sys.stderr, flush=True)
+            print(f"\r[{index}/{len(names)}] {progress_name:<12} running...",
+                  end="", file=sys.stderr, flush=True)
         try:
             combined.merge(run_scanner(name, context))
         except EgyxosError as exc:
             combined.errors.append(exc.as_dict())
         if context.config.get("progress"):
-            print(f"\r[{index}/{len(names)}] {name:<12} complete   ", file=sys.stderr, flush=True)
+            print(f"\r[{index}/{len(names)}] {progress_name:<12} complete   ",
+                  file=sys.stderr, flush=True)
     return combined.finish()
