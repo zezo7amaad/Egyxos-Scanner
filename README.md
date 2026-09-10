@@ -139,23 +139,16 @@ egyxos sqli "https://authorized.example/item?id=1" \
 
 ### Reports and output
 
-Full scans create timestamped directories:
-
-```text
-results/
-└── example.com/
-    └── 2026-09-08_133500/
-        ├── result.json
-        ├── report.html
-        └── egyxos.log
-```
+With the default terminal format, scans print the external tool output in a
+clean, labeled presentation. Reports are only written when `--output` is
+supplied:
 
 Supported formats are `terminal`, `json`, `csv`, `html`, and `sarif`:
 
 ```bash
-egyxos scan example.com --yes --format json
-egyxos report results/example.com/TIMESTAMP --format html --output report.html
-egyxos report results/example.com/TIMESTAMP --format sarif --output report.sarif
+egyxos scan example.com --yes --format json --output result.json
+egyxos report result.json --format html --output report.html
+egyxos report result.json --format sarif --output report.sarif
 ```
 
 ### Configuration

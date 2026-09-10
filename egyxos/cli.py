@@ -11,7 +11,6 @@ import os
 import shutil
 import sys
 import subprocess
-from datetime import datetime
 from pathlib import Path
 
 from . import __version__
@@ -137,18 +136,6 @@ def _context(args):
 
 def _emit(result, args):
     text = render(result, args.format)
-    if getattr(args, "command", None) in ("scan", "recon"):
-        stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        result_dir = Path(args.output_dir or "results") / result.target / stamp
-        result_dir.mkdir(parents=True, exist_ok=True)
-        write_report(result, result_dir / "result.json", "json")
-        (result_dir / "egyxos.log").write_text(
-            f"scanner={result.scanner}\ntarget={result.target}\n"
-            f"errors={len(result.errors)}\nfindings={len(result.findings)}\n",
-            encoding="utf-8",
-        )
-        if args.format != "terminal":
-            write_report(result, result_dir / f"report.{args.format}", args.format)
     if args.output:
         write_report(result, args.output, args.format)
         if args.format == "terminal":
